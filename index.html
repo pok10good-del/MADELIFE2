@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MAGIC MADE LIFE | 매일 저녁 8시, 당신의 미래가 배달됩니다</title>
+<meta name="description" content="당신이 살아온 인생을 기록하면, AI가 성공으로 이어지는 미래의 이야기를 매일 저녁 8시에 편지로 배달합니다." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #050505;
+    --ink: #ffffff;
+    --gold: #d4af37;
+    --gold-soft: #8e6e3e;
+    --line: rgba(212, 175, 55, 0.28);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: 'Noto Serif KR', serif;
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  .gold-text { color: var(--gold); }
+  .gradient-gold-bg {
+    background: linear-gradient(to right, var(--gold-soft), var(--gold), var(--gold-soft));
+    box-shadow: 0 0 24px rgba(212, 175, 55, 0.35);
+  }
+  a { color: inherit; }
+  img { display: block; }
+
+  /* ---------- Stage: 1024:1537 hero canvas, with extra room below for larger card text (slight scroll) ---------- */
+  .stage {
+    position: relative;
+    --stage-w: min(100vw, calc(100vh * 1024 / 1537));
+    width: var(--stage-w);
+    height: calc(var(--stage-w) * 1626 / 1024);
+    margin: 0 auto;
+    overflow: hidden;
+    background-color: #050505;
+    container-type: inline-size;
+  }
+  .stage-bg {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(180deg, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.08) 22%, rgba(0,0,0,0.1) 55%, rgba(0,0,0,0.55) 78%, rgba(0,0,0,0.92) 100%),
+      url('assets/img/hero-couple-city.jpg');
+    background-size: cover;
+    background-position: center 18%;
+  }
+
+  .logo {
+    position: absolute;
+    left: 4%;
+    top: 2.836%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: 0.28em;
+    font-weight: 600;
+    font-size: 2.1cqw;
+  }
+  .logo svg { width: 3.4cqw; height: 3.4cqw; }
+
+  .headline {
+    position: absolute;
+    left: 4%;
+    top: 10.87%;
+    width: 62%;
+    font-size: 5.3cqw;
+    line-height: 1.32;
+    font-weight: 700;
+    margin: 0;
+    text-shadow: 2px 2px 14px rgba(0,0,0,0.85);
+  }
+
+  .lede {
+    position: absolute;
+    left: 4%;
+    top: 28.354%;
+    width: 42%;
+    color: #e2e2e2;
+    font-size: 1.55cqw;
+    font-weight: 300;
+    line-height: 1.85;
+    text-shadow: 1px 1px 8px rgba(0,0,0,0.8);
+    margin: 0;
+  }
+
+  .cta-btn {
+    position: absolute;
+    left: 4%;
+    top: 51.986%;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 1.3cqw 2.6cqw;
+    border-radius: 1cqw;
+    font-size: 1.9cqw;
+    font-weight: 700;
+    color: #000;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .cta-btn svg { width: 1.6cqw; height: 1.6cqw; }
+
+  .divider {
+    position: absolute;
+    left: 4%;
+    right: 4%;
+    top: 62.86%;
+    display: flex;
+    align-items: center;
+    gap: 1.2cqw;
+  }
+  .divider .line { flex: 1; height: 1px; background: rgba(255,255,255,0.35); }
+  .divider p { font-size: 1.7cqw; color: #f0f0f0; margin: 0; white-space: nowrap; }
+
+  .cards {
+    position: absolute;
+    left: 4%;
+    right: 4%;
+    top: 66.629%;
+    height: 25.809%;
+    display: flex;
+    gap: 1.4%;
+  }
+  .card { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; }
+  .card .photo {
+    position: relative;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    border-radius: 1cqw;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    margin-bottom: 0.9cqw;
+  }
+  .card .photo img { width: 100%; height: 100%; object-fit: cover; }
+  .card .caption { flex: 0 0 auto; width: 100%; height: 11.2cqw; }
+  .card .icon-wrap { width: 2.75cqw; height: 2.75cqw; margin: 0 auto 0.55cqw; }
+  .card .icon-wrap svg { width: 100%; height: 100%; }
+  .card h3 { font-size: 1.98cqw; font-weight: 700; margin: 0 0 0.38cqw; }
+  .card p { font-size: 1.42cqw; color: #aaa; line-height: 1.35; margin: 0; font-weight: 300; }
+
+  .car-strip {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 7.562%;
+    background-image:
+      linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0) 40%),
+      url('assets/img/banner-car.jpg');
+    background-size: cover;
+    background-position: center 70%;
+    border-top: 1px solid var(--line);
+  }
+
+  .sharpen-hero,
+  .sharpen-card,
+  .sharpen-strip {
+    filter: contrast(1.05) saturate(1.08);
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="stage-bg sharpen-hero"></div>
+
+  <div class="logo gold-text">
+    <svg fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.4 7.4-6.2-4.5-6.2 4.5 2.4-7.4-6.2-4.5h7.6z"></path></svg>
+    MAGIC MADE LIFE
+  </div>
+
+  <h1 class="headline">
+    매일 저녁 8시,<br />
+    <span class="gold-text">당신의 미래가<br />배달됩니다.</span>
+  </h1>
+
+  <p class="lede">
+    당신이 살아온 인생을 기록해 주세요.<br />
+    AI가 당신만의 스토리를 바탕으로<br />
+    성공으로 이어지는 미래를 그려드립니다.
+  </p>
+
+  <a href="#" class="cta-btn gradient-gold-bg">
+    미래로 메시지 보내기
+    <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+      <path d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+    </svg>
+  </a>
+
+  <div class="divider">
+    <div class="line"></div>
+    <p>당신의 이야기가, <span class="gold-text">인생</span>을 바꿉니다.</p>
+    <div class="line"></div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="photo"><img class="sharpen-card" src="assets/img/feature-past.jpg" alt="달빛이 비치는 골목길" /></div>
+      <div class="caption">
+        <div class="icon-wrap gold-text">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+      </div>
+        <h3>과거의 나</h3>
+        <p>어떤 삶을 살아왔나요?</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="photo"><img class="sharpen-card" src="assets/img/feature-diary.jpg" alt="일기를 쓰는 손" /></div>
+      <div class="caption">
+        <div class="icon-wrap gold-text">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+      </div>
+        <h3>후회와 다짐</h3>
+        <p>바꾸고 싶었던 순간은 언제였나요?</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="photo"><img class="sharpen-card" src="assets/img/feature-crystal.jpg" alt="빛나는 크리스탈 볼" /></div>
+      <div class="caption">
+        <div class="icon-wrap gold-text">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      </div>
+        <h3>매일 저녁 8시</h3>
+        <p>매일 저녁 8시가 되면 당신에게 미래일기가 전달됩니다.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="photo"><img class="sharpen-card" src="assets/img/feature-love.jpg" alt="서로를 안은 커플" /></div>
+      <div class="caption">
+        <div class="icon-wrap gold-text">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+      </div>
+        <h3>사랑과 관계</h3>
+        <p>원하는 관계와 사랑을 이루세요.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="photo"><img class="sharpen-card" src="assets/img/feature-freedom.jpg" alt="야경이 보이는 요트 파티" /></div>
+      <div class="caption">
+        <div class="icon-wrap gold-text">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+      </div>
+        <h3>자유와 풍요</h3>
+        <p>시간과 돈에서 자유로운 삶을 누리세요.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="car-strip sharpen-strip" aria-label="자유와 풍요"></div>
+</div>
+
+</body>
+</html>
