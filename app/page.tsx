@@ -1,3 +1,5 @@
+import { FutureMessageCTA } from "@/components/FutureMessageCTA";
+
 export default function Home() {
   return (
     <div className="stage">
@@ -28,19 +30,7 @@ export default function Home() {
         성공으로 이어지는 미래를 그려드립니다.
       </p>
 
-      <a href="/login" className="cta-btn gradient-gold-bg">
-        미래로 메시지 보내기
-        <svg
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          viewBox="0 0 24 24"
-        >
-          <path d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
-        </svg>
-      </a>
+      <FutureMessageCTA />
 
       <div className="divider">
         <div className="line" />

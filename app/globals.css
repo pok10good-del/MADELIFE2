@@ -93,12 +93,16 @@ img { display: block; }
   border-radius: 1cqw;
   font-size: 1.9cqw;
   font-weight: 700;
+  font-family: inherit;
   color: #000;
   border: none;
   cursor: pointer;
   white-space: nowrap;
+  transition: opacity 0.2s ease;
 }
 .cta-btn svg { width: 1.6cqw; height: 1.6cqw; }
+.cta-btn-locked { opacity: 0.4; }
+.cta-btn-locked:hover { opacity: 0.55; }
 
 .divider {
   position: absolute;
@@ -208,17 +212,20 @@ img { display: block; }
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  background: #fff;
-  color: #1f1f1f;
-  border: 1px solid #dadce0;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px 24px;
   font-size: 16px;
   font-weight: 600;
-  font-family: system-ui, sans-serif;
+  font-family: 'Noto Serif KR', serif;
   cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
+.google-btn:hover { border-color: var(--gold); background: rgba(0, 0, 0, 0.55); }
 .google-btn:disabled { opacity: 0.6; cursor: default; }
+.google-btn svg { flex: 0 0 auto; }
 
 .dashboard-page {
   min-height: 100vh;
