@@ -1,12 +1,15 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { GoogleLoginButton } from "@/components/GoogleLoginButton";
 
 export function AuthHeader() {
   const { user, loading, signOut } = useAuth();
+  const pathname = usePathname();
 
   if (loading) return null;
+  if (pathname?.startsWith("/dashboard")) return null;
 
   return (
     <div className="auth-header">
