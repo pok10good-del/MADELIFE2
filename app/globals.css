@@ -209,6 +209,13 @@ img { display: block; }
   padding: 24px;
 }
 
+.login-error {
+  margin: -8px 0 0;
+  font-size: 13px;
+  color: #e07b7b;
+  text-align: center;
+}
+
 .google-btn {
   display: inline-flex;
   align-items: center;
