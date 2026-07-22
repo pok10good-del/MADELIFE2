@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { createClient } from "@/lib/supabase/client";
+import { saveStory, getUserStories } from "@/lib/supabase/stories";
+import { mapStoryInputToStoriesInsert } from "@/lib/supabase/stories.mapper";
+import type { StoriesRow } from "@/lib/supabase/stories.types";
 import "./dashboard.css";
 import {
   IconArchive,
@@ -108,6 +112,7 @@ export default function DashboardPage() {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
   const loggingOutRef = useRef(false);
+  const supabase = useMemo(() => createClient(), []);
 
   const [storyText, setStoryText] = useState("");
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
@@ -122,12 +127,37 @@ export default function DashboardPage() {
   const [celebrityName, setCelebrityName] = useState("");
   const [shareOption, setShareOption] = useState<"private" | "friends" | "public">("private");
   const [submitted, setSubmitted] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [stories, setStories] = useState<StoriesRow[]>([]);
+  const [storiesLoading, setStoriesLoading] = useState(false);
+  const [storiesError, setStoriesError] = useState<string | null>(null);
+
+  const fetchStories = async (userId: string) => {
+    setStoriesLoading(true);
+    setStoriesError(null);
+    try {
+      const rows = await getUserStories(supabase, userId);
+      setStories(rows);
+    } catch (error) {
+      setStoriesError(error instanceof Error ? error.message : "목록을 불러오지 못했습니다.");
+    } finally {
+      setStoriesLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!loading && !user && !loggingOutRef.current) {
       router.replace("/login");
     }
   }, [loading, user, router]);
+
+  useEffect(() => {
+    if (user) {
+      fetchStories(user.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   if (loading || !user) {
     return <div className="dashboard-page">불러오는 중...</div>;
@@ -192,9 +222,30 @@ export default function DashboardPage() {
 
   const canSubmit = storyText.trim().length >= STORY_MIN_LENGTH && selectedPaths.length > 0;
 
-  const handleSubmit = () => {
-    if (!canSubmit) return;
-    setSubmitted(true);
+  const handleSubmit = async () => {
+    if (!canSubmit || isSaving || submitted) return;
+
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      const storyInsert = mapStoryInputToStoriesInsert({
+        storyText,
+        birthDate: selectedDay,
+        storyStartDate: selectedStoryDate,
+        selectedPaths,
+        sportChoice,
+        celebrityName,
+        shareOption,
+      });
+      await saveStory(supabase, user.id, { ...storyInsert, user_id: user.id });
+      setSubmitted(true);
+      await fetchStories(user.id);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "저장 중 오류가 발생했습니다.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -513,11 +564,72 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          <button type="button" className="mml-submit-btn" disabled={!canSubmit} onClick={handleSubmit}>
-            {submitted ? "전송 완료" : "미래로 향한 메시지 보내기"}
+          <button
+            type="button"
+            className="mml-submit-btn"
+            disabled={!canSubmit || isSaving || submitted}
+            onClick={handleSubmit}
+          >
+            {isSaving ? "저장 중..." : submitted ? "전송 완료" : "미래로 향한 메시지 보내기"}
             <IconArrowRight />
           </button>
+          {saveError && (
+            <p className="mml-footnote" style={{ color: "#e5484d" }}>
+              {saveError}
+            </p>
+          )}
           <p className="mml-footnote">모든 정보는 안전하게 암호화되어, AI 분석에 최적화 되어만 사용됩니다.</p>
+
+          <section className="mml-panel">
+            <h2 className="mml-panel-title">
+              <IconArchive /> 저장된 스토리
+            </h2>
+
+            {storiesLoading && <p className="mml-footnote">불러오는 중...</p>}
+
+            {storiesError && (
+              <p className="mml-footnote" style={{ color: "#e5484d" }}>
+                {storiesError}
+              </p>
+            )}
+
+            {!storiesLoading && !storiesError && stories.length === 0 && (
+              <p className="mml-footnote">저장된 스토리가 없습니다.</p>
+            )}
+
+            {!storiesLoading && !storiesError && stories.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {stories.map((story) => (
+                  <div
+                    key={story.id}
+                    style={{
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                      borderRadius: 10,
+                      padding: "12px 16px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontSize: 13,
+                        opacity: 0.8,
+                      }}
+                    >
+                      <span>{story.story_start_date}</span>
+                      <span>{story.status}</span>
+                    </div>
+                    <p style={{ margin: "8px 0" }}>
+                      {story.story_text.length > 120
+                        ? `${story.story_text.slice(0, 120)}...`
+                        : story.story_text}
+                    </p>
+                    <div style={{ fontSize: 12, opacity: 0.6 }}>{story.created_at}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </main>
       </div>
     </div>
