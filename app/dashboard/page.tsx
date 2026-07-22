@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { createClient } from "@/lib/supabase/client";
 import { saveStory, getUserStories } from "@/lib/supabase/stories";
 import { mapStoryInputToStoriesInsert } from "@/lib/supabase/stories.mapper";
-import type { StoriesRow } from "@/lib/supabase/stories.types";
+import type { StoriesRow, StoriesStatus } from "@/lib/supabase/stories.types";
 import "./dashboard.css";
 import {
   IconArchive,
@@ -35,6 +35,28 @@ import {
 const STORY_MIN_LENGTH = 300;
 const MAX_FRAGMENTS = 2;
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+const SELECTED_STORY_ID_KEY = "mml:selectedStoryId";
+type StatusFilter = "전체" | StoriesStatus;
+const STATUS_FILTERS: StatusFilter[] = ["전체", "pending", "processing", "active", "completed"];
+type SortOrder = "최신순" | "오래된순";
+const SORT_ORDERS: SortOrder[] = ["최신순", "오래된순"];
+type DateFilter = "전체" | "오늘" | "최근 7일" | "최근 30일";
+const DATE_FILTERS: DateFilter[] = ["전체", "오늘", "최근 7일", "최근 30일"];
+
+function isSameLocalDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+  );
+}
+
+function isWithinDateFilter(createdAt: string, filter: DateFilter, now: Date): boolean {
+  if (filter === "전체") return true;
+  const createdDate = new Date(createdAt);
+  if (filter === "오늘") return isSameLocalDay(createdDate, now);
+  const days = filter === "최근 7일" ? 7 : 30;
+  const cutoff = now.getTime() - days * 24 * 60 * 60 * 1000;
+  return createdDate.getTime() >= cutoff;
+}
 
 const FREE_FRAGMENTS = [
   { id: "success", label: "성공", Icon: IconTrophy },
@@ -108,6 +130,16 @@ function buildCalendarGrid(year: number, month: number) {
   return cells;
 }
 
+function formatDateOnly(value: string): string {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.toLocaleDateString();
+}
+
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString();
+}
+
 export default function DashboardPage() {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
@@ -132,6 +164,11 @@ export default function DashboardPage() {
   const [stories, setStories] = useState<StoriesRow[]>([]);
   const [storiesLoading, setStoriesLoading] = useState(false);
   const [storiesError, setStoriesError] = useState<string | null>(null);
+  const [selectedStory, setSelectedStory] = useState<StoriesRow | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("전체");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("최신순");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("전체");
 
   const fetchStories = async (userId: string) => {
     setStoriesLoading(true);
@@ -139,12 +176,41 @@ export default function DashboardPage() {
     try {
       const rows = await getUserStories(supabase, userId);
       setStories(rows);
+
+      const savedId = localStorage.getItem(SELECTED_STORY_ID_KEY);
+      const restored = savedId ? rows.find((row) => row.id === savedId) ?? null : null;
+      setSelectedStory(restored);
     } catch (error) {
       setStoriesError(error instanceof Error ? error.message : "목록을 불러오지 못했습니다.");
     } finally {
       setStoriesLoading(false);
     }
   };
+
+  const handleDeselectStory = () => {
+    setSelectedStory(null);
+    localStorage.removeItem(SELECTED_STORY_ID_KEY);
+  };
+
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("전체");
+    setSortOrder("최신순");
+    setDateFilter("전체");
+  };
+
+  const sortedStories = useMemo(() => {
+    const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+    const now = new Date();
+    const filtered = stories
+      .filter((story) => statusFilter === "전체" || story.status === statusFilter)
+      .filter((story) => story.story_text.toLowerCase().includes(normalizedSearchQuery))
+      .filter((story) => isWithinDateFilter(story.created_at, dateFilter, now));
+    return [...filtered].sort((a, b) => {
+      const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      return sortOrder === "최신순" ? -diff : diff;
+    });
+  }, [stories, searchQuery, statusFilter, dateFilter, sortOrder]);
 
   useEffect(() => {
     if (!loading && !user && !loggingOutRef.current) {
@@ -585,6 +651,115 @@ export default function DashboardPage() {
               <IconArchive /> 저장된 스토리
             </h2>
 
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="스토리 내용 검색"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                border: "1px solid rgba(255, 255, 255, 0.12)",
+                borderRadius: 8,
+                padding: "8px 12px",
+                fontSize: 13,
+                background: "transparent",
+                color: "inherit",
+                marginBottom: 12,
+              }}
+            />
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+              {STATUS_FILTERS.map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setStatusFilter(filter)}
+                  style={{
+                    border:
+                      filter === statusFilter
+                        ? "1px solid var(--gold)"
+                        : "1px solid rgba(255, 255, 255, 0.12)",
+                    borderRadius: 999,
+                    padding: "4px 12px",
+                    fontSize: 12,
+                    background: filter === statusFilter ? "rgba(212, 175, 55, 0.1)" : "transparent",
+                    color: "inherit",
+                    cursor: "pointer",
+                  }}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+              {SORT_ORDERS.map((order) => (
+                <button
+                  key={order}
+                  type="button"
+                  onClick={() => setSortOrder(order)}
+                  style={{
+                    border:
+                      order === sortOrder
+                        ? "1px solid var(--gold)"
+                        : "1px solid rgba(255, 255, 255, 0.12)",
+                    borderRadius: 999,
+                    padding: "4px 12px",
+                    fontSize: 12,
+                    background: order === sortOrder ? "rgba(212, 175, 55, 0.1)" : "transparent",
+                    color: "inherit",
+                    cursor: "pointer",
+                  }}
+                >
+                  {order}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+              {DATE_FILTERS.map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setDateFilter(filter)}
+                  style={{
+                    border:
+                      filter === dateFilter
+                        ? "1px solid var(--gold)"
+                        : "1px solid rgba(255, 255, 255, 0.12)",
+                    borderRadius: 999,
+                    padding: "4px 12px",
+                    fontSize: 12,
+                    background: filter === dateFilter ? "rgba(212, 175, 55, 0.1)" : "transparent",
+                    color: "inherit",
+                    cursor: "pointer",
+                  }}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                style={{
+                  background: "transparent",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                  borderRadius: 6,
+                  padding: "4px 10px",
+                  fontSize: 12,
+                  color: "inherit",
+                  cursor: "pointer",
+                  opacity: 0.8,
+                }}
+              >
+                조건 초기화
+              </button>
+            </div>
+
             {storiesLoading && <p className="mml-footnote">불러오는 중...</p>}
 
             {storiesError && (
@@ -597,36 +772,103 @@ export default function DashboardPage() {
               <p className="mml-footnote">저장된 스토리가 없습니다.</p>
             )}
 
-            {!storiesLoading && !storiesError && stories.length > 0 && (
+            {!storiesLoading && !storiesError && stories.length > 0 && sortedStories.length === 0 && (
+              <p className="mml-footnote">조건에 맞는 스토리가 없습니다.</p>
+            )}
+
+            {!storiesLoading && !storiesError && sortedStories.length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {stories.map((story) => (
-                  <div
-                    key={story.id}
-                    style={{
-                      border: "1px solid rgba(255, 255, 255, 0.12)",
-                      borderRadius: 10,
-                      padding: "12px 16px",
-                    }}
-                  >
+                {sortedStories.map((story) => {
+                  const isSelected = story.id === selectedStory?.id;
+                  return (
                     <div
+                      key={story.id}
+                      onClick={() => {
+                        setSelectedStory(story);
+                        localStorage.setItem(SELECTED_STORY_ID_KEY, story.id);
+                      }}
                       style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: 13,
-                        opacity: 0.8,
+                        border: isSelected
+                          ? "1px solid var(--gold)"
+                          : "1px solid rgba(255, 255, 255, 0.12)",
+                        borderRadius: 10,
+                        padding: "12px 16px",
+                        cursor: "pointer",
+                        backgroundColor: isSelected ? "rgba(212, 175, 55, 0.1)" : "transparent",
                       }}
                     >
-                      <span>{story.story_start_date}</span>
-                      <span>{story.status}</span>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: 13,
+                          opacity: 0.8,
+                        }}
+                      >
+                        <span>{story.story_start_date}</span>
+                        <span>{story.status}</span>
+                      </div>
+                      <p style={{ margin: "8px 0" }}>
+                        {story.story_text.length > 120
+                          ? `${story.story_text.slice(0, 120)}...`
+                          : story.story_text}
+                      </p>
+                      <div style={{ fontSize: 12, opacity: 0.6 }}>{story.created_at}</div>
                     </div>
-                    <p style={{ margin: "8px 0" }}>
-                      {story.story_text.length > 120
-                        ? `${story.story_text.slice(0, 120)}...`
-                        : story.story_text}
-                    </p>
-                    <div style={{ fontSize: 12, opacity: 0.6 }}>{story.created_at}</div>
-                  </div>
-                ))}
+                  );
+                })}
+              </div>
+            )}
+
+            {selectedStory && (
+              <div
+                style={{
+                  marginTop: 16,
+                  padding: "12px 16px",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                  borderRadius: 10,
+                  background: "rgba(255, 255, 255, 0.03)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                  <button
+                    type="button"
+                    onClick={handleDeselectStory}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid rgba(255, 255, 255, 0.2)",
+                      borderRadius: 6,
+                      padding: "4px 10px",
+                      fontSize: 12,
+                      color: "inherit",
+                      cursor: "pointer",
+                      opacity: 0.8,
+                    }}
+                  >
+                    선택 해제
+                  </button>
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "auto 1fr",
+                    gap: "6px 12px",
+                    fontSize: 13,
+                    marginBottom: 12,
+                  }}
+                >
+                  <span style={{ opacity: 0.6 }}>시작일</span>
+                  <span>{formatDateOnly(selectedStory.story_start_date)}</span>
+                  <span style={{ opacity: 0.6 }}>상태</span>
+                  <span>{selectedStory.status}</span>
+                  <span style={{ opacity: 0.6 }}>공유 설정</span>
+                  <span>{selectedStory.share_option}</span>
+                  <span style={{ opacity: 0.6 }}>생성일</span>
+                  <span>{formatDateTime(selectedStory.created_at)}</span>
+                  <span style={{ opacity: 0.6 }}>수정일</span>
+                  <span>{formatDateTime(selectedStory.updated_at)}</span>
+                </div>
+                <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{selectedStory.story_text}</p>
               </div>
             )}
           </section>
