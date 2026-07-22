@@ -1,13 +1,13 @@
 import type { AIProviderEnv } from "@/lib/ai/ai-provider-env";
 import type { AIProviderConfig } from "@/lib/ai/ai-provider-config";
-import { VALID_STORY_RESPONSE } from "@/lib/ai/story-generation.mock";
+import { VALID_STORY_GENERATION_SEQUENCE } from "@/lib/ai/story-generation.mock";
 
 export function mapAIProviderEnvToConfig(env: AIProviderEnv): AIProviderConfig {
   switch (env.AI_PROVIDER) {
     case "mock": {
       return {
         type: "mock",
-        mockResponse: VALID_STORY_RESPONSE,
+        mockResponse: VALID_STORY_GENERATION_SEQUENCE,
       };
     }
     case "claude": {

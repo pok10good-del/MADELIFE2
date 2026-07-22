@@ -23,7 +23,11 @@ export class ClaudeAIProvider extends BaseAIProvider {
     this.apiKey = apiKey;
   }
 
-  protected async executeGenerate(prompt: string, options?: GenerateOptions): Promise<string> {
+  protected async executeGenerate(
+    prompt: string,
+    options?: GenerateOptions,
+    systemPrompt?: string
+  ): Promise<string> {
     const response = await fetch(CLAUDE_API_URL, {
       method: "POST",
       headers: {
@@ -35,6 +39,7 @@ export class ClaudeAIProvider extends BaseAIProvider {
         model: CLAUDE_MODEL,
         max_tokens: options?.maxTokens ?? DEFAULT_MAX_TOKENS,
         temperature: options?.temperature,
+        system: systemPrompt,
         messages: [{ role: "user", content: prompt }],
       }),
     });

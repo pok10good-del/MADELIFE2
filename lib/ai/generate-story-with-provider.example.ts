@@ -1,16 +1,16 @@
 import type { StoryGenerationResult } from "@/lib/ai/story-generation.types";
 import { MockAIProvider } from "@/lib/ai/mock-ai-provider";
 import { generateStoryWithProvider } from "@/lib/ai/generate-story-with-provider";
-import { VALID_STORY_RESPONSE } from "@/lib/ai/story-generation.mock";
+import { VALID_STORY_GENERATION_SEQUENCE } from "@/lib/ai/story-generation.mock";
 import { VALID_STORY_INPUT, INVALID_STORY_INPUT } from "@/lib/ai/generate-story.test-data";
 
 export async function runProviderExample(): Promise<StoryGenerationResult> {
-  const provider = new MockAIProvider(VALID_STORY_RESPONSE);
+  const provider = new MockAIProvider(VALID_STORY_GENERATION_SEQUENCE);
   return generateStoryWithProvider(provider, VALID_STORY_INPUT);
 }
 
 export async function runProviderInvalidExample(): Promise<Error> {
-  const provider = new MockAIProvider(VALID_STORY_RESPONSE);
+  const provider = new MockAIProvider(VALID_STORY_GENERATION_SEQUENCE);
   try {
     await generateStoryWithProvider(provider, INVALID_STORY_INPUT);
   } catch (error) {
