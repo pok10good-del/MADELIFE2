@@ -1,6 +1,6 @@
 export type StoriesShareOption = "private" | "friends" | "public";
 
-export type StoriesStatus = "pending" | "processing" | "active" | "completed";
+export type StoriesStatus = "pending" | "processing" | "active" | "completed" | "failed";
 
 export interface StoriesRow {
   id: string;
@@ -13,6 +13,12 @@ export interface StoriesRow {
   celebrity_name: string | null;
   share_option: StoriesShareOption;
   status: StoriesStatus;
+  regret_point: string;
+  generated_title: string | null;
+  generated_content: string | null;
+  generated_start_age: number | null;
+  generated_end_age: number | null;
+  generated_themes: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -28,6 +34,12 @@ export interface StoriesInsert {
   celebrity_name?: string | null;
   share_option?: StoriesShareOption;
   status?: StoriesStatus;
+  regret_point: string;
+  generated_title?: string | null;
+  generated_content?: string | null;
+  generated_start_age?: number | null;
+  generated_end_age?: number | null;
+  generated_themes?: string[] | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -43,6 +55,12 @@ export interface StoriesUpdate {
   celebrity_name?: string | null;
   share_option?: StoriesShareOption;
   status?: StoriesStatus;
+  regret_point?: string;
+  generated_title?: string | null;
+  generated_content?: string | null;
+  generated_start_age?: number | null;
+  generated_end_age?: number | null;
+  generated_themes?: string[] | null;
   created_at?: string;
   updated_at?: string;
 }

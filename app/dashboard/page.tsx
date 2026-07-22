@@ -4,9 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { createClient } from "@/lib/supabase/client";
-import { saveStory, getUserStories } from "@/lib/supabase/stories";
+import { saveStory, updateStory, getUserStories } from "@/lib/supabase/stories";
 import { mapStoryInputToStoriesInsert } from "@/lib/supabase/stories.mapper";
 import type { StoriesRow, StoriesStatus } from "@/lib/supabase/stories.types";
+import { buildStoryGenerationInput } from "@/lib/story-generation/build-story-generation-input";
+import { mapStoryGenerationResultToStoriesUpdate } from "@/lib/story-generation/map-generation-result-to-stories-update";
+import type { StoryGenerationResult } from "@/lib/ai/story-generation.types";
 import "./dashboard.css";
 import {
   IconArchive,
@@ -37,7 +40,7 @@ const MAX_FRAGMENTS = 2;
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const SELECTED_STORY_ID_KEY = "mml:selectedStoryId";
 type StatusFilter = "전체" | StoriesStatus;
-const STATUS_FILTERS: StatusFilter[] = ["전체", "pending", "processing", "active", "completed"];
+const STATUS_FILTERS: StatusFilter[] = ["전체", "pending", "processing", "active", "completed", "failed"];
 type SortOrder = "최신순" | "오래된순";
 const SORT_ORDERS: SortOrder[] = ["최신순", "오래된순"];
 type DateFilter = "전체" | "오늘" | "최근 7일" | "최근 30일";
@@ -157,6 +160,7 @@ export default function DashboardPage() {
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [sportChoice, setSportChoice] = useState<string | null>(null);
   const [celebrityName, setCelebrityName] = useState("");
+  const [regretPoint, setRegretPoint] = useState("");
   const [shareOption, setShareOption] = useState<"private" | "friends" | "public">("private");
   const [submitted, setSubmitted] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -286,13 +290,18 @@ export default function DashboardPage() {
   const avatarUrl = user.user_metadata?.avatar_url as string | undefined;
   const initial = displayName.charAt(0).toUpperCase();
 
-  const canSubmit = storyText.trim().length >= STORY_MIN_LENGTH && selectedPaths.length > 0;
+  const canSubmit =
+    storyText.trim().length >= STORY_MIN_LENGTH &&
+    selectedPaths.length > 0 &&
+    regretPoint.trim().length > 0;
 
   const handleSubmit = async () => {
     if (!canSubmit || isSaving || submitted) return;
 
     setIsSaving(true);
     setSaveError(null);
+
+    let savedStory: StoriesRow | null = null;
 
     try {
       const storyInsert = mapStoryInputToStoriesInsert({
@@ -303,13 +312,41 @@ export default function DashboardPage() {
         sportChoice,
         celebrityName,
         shareOption,
+        regretPoint,
       });
-      await saveStory(supabase, user.id, { ...storyInsert, user_id: user.id });
+      savedStory = await saveStory(supabase, user.id, { ...storyInsert, user_id: user.id });
       setSubmitted(true);
-      await fetchStories(user.id);
+
+      const generationInput = buildStoryGenerationInput(savedStory);
+      const response = await fetch("/api/story/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(generationInput),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? "이야기 생성 중 오류가 발생했습니다.");
+      }
+
+      const result = (await response.json()) as StoryGenerationResult;
+      await updateStory(
+        supabase,
+        user.id,
+        savedStory.id,
+        mapStoryGenerationResultToStoriesUpdate(result)
+      );
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "저장 중 오류가 발생했습니다.");
+      if (savedStory) {
+        try {
+          await updateStory(supabase, user.id, savedStory.id, { status: "failed" });
+        } catch {
+          // best-effort status update; original error is already surfaced above
+        }
+      }
     } finally {
+      await fetchStories(user.id);
       setIsSaving(false);
     }
   };
@@ -395,6 +432,19 @@ export default function DashboardPage() {
             <div className={`mml-char-count${storyText.length >= STORY_MIN_LENGTH ? " ok" : ""}`}>
               {storyText.length} / {STORY_MIN_LENGTH} characters
             </div>
+          </section>
+
+          <section className="mml-panel">
+            <h2 className="mml-panel-title">
+              <IconQuill /> 가장 후회되는 지점을 알려주세요.
+            </h2>
+            <p className="mml-panel-sub">인생에서 가장 후회되는 순간이나 선택을 적어주세요.</p>
+            <textarea
+              className="mml-textarea"
+              placeholder="가장 후회되는 순간이나 선택을 자유롭게 작성해주세요..."
+              value={regretPoint}
+              onChange={(e) => setRegretPoint(e.target.value)}
+            />
           </section>
 
           <div className="mml-grid-2">
@@ -869,6 +919,19 @@ export default function DashboardPage() {
                   <span>{formatDateTime(selectedStory.updated_at)}</span>
                 </div>
                 <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{selectedStory.story_text}</p>
+
+                {selectedStory.generated_title && (
+                  <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(255, 255, 255, 0.12)" }}>
+                    <h3 style={{ margin: "0 0 8px" }}>{selectedStory.generated_title}</h3>
+                    <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{selectedStory.generated_content}</p>
+                  </div>
+                )}
+
+                {selectedStory.status === "failed" && (
+                  <p className="mml-footnote" style={{ color: "#e5484d" }}>
+                    이야기 생성에 실패했습니다.
+                  </p>
+                )}
               </div>
             )}
           </section>

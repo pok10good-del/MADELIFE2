@@ -8,6 +8,7 @@ export interface StoryFormInput {
   sportChoice: string | null;
   celebrityName: string;
   shareOption: StoriesShareOption;
+  regretPoint: string;
 }
 
 const STORY_TEXT_MIN_LENGTH = 300;
@@ -53,6 +54,11 @@ export function mapStoryInputToStoriesInsert(
     throw new Error("celebrity_name is required when path-celebrity is selected");
   }
 
+  const regretPoint = input.regretPoint.trim();
+  if (regretPoint.length === 0) {
+    throw new Error("regret_point is required");
+  }
+
   return {
     story_text: storyText,
     birth_date: toDateString(input.birthDate),
@@ -61,5 +67,6 @@ export function mapStoryInputToStoriesInsert(
     sport_choice: sportChoice,
     celebrity_name: celebrityName,
     share_option: input.shareOption,
+    regret_point: regretPoint,
   };
 }
