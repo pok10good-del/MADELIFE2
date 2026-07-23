@@ -4,10 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { createClient } from "@/lib/supabase/client";
-import { getUserStories, updateStory } from "@/lib/supabase/stories";
+import { deleteAllUserStories, getUserStories, updateStory } from "@/lib/supabase/stories";
 import type { StoriesRow } from "@/lib/supabase/stories.types";
 import { AppTopBar } from "@/components/AppTopBar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { IconTrash } from "@/app/dashboard/icons";
 import "../dashboard/dashboard.css";
 import "./archive.css";
 
@@ -27,6 +28,9 @@ export default function ArchivePage() {
   const [storiesLoading, setStoriesLoading] = useState(false);
   const [storiesError, setStoriesError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user && !loggingOutRef.current) {
@@ -96,6 +100,28 @@ export default function ArchivePage() {
     }
   };
 
+  const handleCancelDelete = () => {
+    if (deleting) return;
+    setDeleteTargetId(null);
+    setDeleteError(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await deleteAllUserStories(supabase, user.id);
+      setStories([]);
+      setSelectedId(null);
+      setDeleteTargetId(null);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "삭제 중 오류가 발생했습니다.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="mml">
       <AppTopBar />
@@ -124,7 +150,7 @@ export default function ArchivePage() {
           {!storiesLoading && !storiesError && episodes.length > 0 && selectedEpisode === null && (
             <ul className="archive-toc">
               {episodes.map((episode) => (
-                <li key={episode.id}>
+                <li key={episode.id} className="archive-toc-row">
                   <button
                     type="button"
                     className="archive-toc-item"
@@ -133,6 +159,17 @@ export default function ArchivePage() {
                     <span className="archive-toc-index">{episode.episode_number}화</span>
                     <span className="archive-toc-title">{episode.generated_title}</span>
                     {episode.read_at === null && <span className="archive-toc-unread" aria-label="읽지 않음" />}
+                  </button>
+                  <button
+                    type="button"
+                    className="archive-toc-delete"
+                    aria-label={`${episode.episode_number}화 삭제`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTargetId(episode.id);
+                    }}
+                  >
+                    <IconTrash />
                   </button>
                 </li>
               ))}
@@ -163,6 +200,41 @@ export default function ArchivePage() {
           )}
         </main>
       </div>
+
+      {deleteTargetId && (
+        <div className="archive-delete-overlay" role="dialog" aria-modal="true">
+          <div className="archive-delete-modal">
+            <p className="archive-delete-text">
+              이 미래를 삭제하시겠습니까? 이 미래와 관련된 이야기는 더이상 미래에서 오지 않습니다.
+              <br />
+              또한 현재까지 배달된 모든 미래의 편지가 함께 삭제됩니다.
+            </p>
+            {deleteError && (
+              <p className="mml-footnote" style={{ color: "#e5484d" }}>
+                {deleteError}
+              </p>
+            )}
+            <div className="archive-delete-actions">
+              <button
+                type="button"
+                className="archive-delete-yes"
+                disabled={deleting}
+                onClick={handleConfirmDelete}
+              >
+                {deleting ? "삭제 중..." : "YES"}
+              </button>
+              <button
+                type="button"
+                className="archive-delete-no"
+                disabled={deleting}
+                onClick={handleCancelDelete}
+              >
+                NO
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

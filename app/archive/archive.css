@@ -7,7 +7,14 @@
   gap: 10px;
 }
 
+.archive-toc-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
 .archive-toc-item {
+  flex: 1;
   width: 100%;
   display: flex;
   align-items: center;
@@ -24,6 +31,93 @@
 .archive-toc-item:hover {
   border-color: var(--gold);
   background: rgba(255, 255, 255, 0.05);
+}
+
+.archive-toc-delete {
+  flex-shrink: 0;
+  width: 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  color: #999;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.archive-toc-delete svg {
+  width: 18px;
+  height: 18px;
+}
+.archive-toc-delete:hover {
+  border-color: #e5484d;
+  color: #e5484d;
+  background: rgba(229, 72, 77, 0.08);
+}
+
+.archive-delete-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.archive-delete-modal {
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #0d0d0d;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.archive-delete-text {
+  margin: 0;
+  font-size: 0.98rem;
+  line-height: 1.7;
+  color: #e4e4e4;
+}
+
+.archive-delete-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.archive-delete-yes,
+.archive-delete-no {
+  flex: 1;
+  padding: 12px 0;
+  border-radius: 10px;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--line);
+}
+
+.archive-delete-yes {
+  background: #e5484d;
+  border-color: #e5484d;
+  color: #fff;
+}
+.archive-delete-yes:disabled,
+.archive-delete-no:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.archive-delete-no {
+  background: none;
+  color: #e4e4e4;
+}
+.archive-delete-no:hover {
+  border-color: var(--gold);
 }
 
 .archive-toc-index {

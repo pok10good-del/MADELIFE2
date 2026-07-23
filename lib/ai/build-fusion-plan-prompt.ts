@@ -1,6 +1,11 @@
 import type { StoryGenerationInput } from "@/lib/ai/story-generation.types";
 import type { ChatPrompt } from "@/lib/ai/chat-prompt";
-import { STORY_ENGINE_CORE_RULES } from "@/lib/ai/prompts/story-engine-rules";
+import {
+  CELEBRITY_PURSUIT_REMINDER,
+  COINCIDENCE_GUARD_REMINDER,
+  CONTINUITY_REPEAT_GUARD_REMINDER,
+  STORY_ENGINE_CORE_RULES,
+} from "@/lib/ai/prompts/story-engine-rules";
 import { CHOICE_DICTIONARY } from "@/lib/ai/prompts/choice-dictionary";
 
 export interface FusionPlanRetryContext {
@@ -17,12 +22,14 @@ const PLAN_JSON_SHAPE = [
   '  "causal_connection": "두 조각이 원인과 결과로 이어지는 구체적인 관계",',
   '  "theme1_event": "본문에 반드시 등장할 첫 번째 조각의 구체적인 사건",',
   '  "theme2_event": "본문에 반드시 등장할 두 번째 조각의 구체적인 사건",',
-  '  "intersection_event": "두 조각이 직접 충돌하거나 결합되는 핵심 사건",',
-  '  "ending_effect": "두 조각의 결합이 이번 화의 마지막에 남기는 변화"',
+  '  "intersection_event": "두 조각이 직접 충돌하거나 결합되는 핵심 사건이면서, 동시에 다음 화로 이어질 새로운 사건의 조짐을 암시하는 사건",',
+  '  "ending_effect": "암시된 사건의 트리거(계기)가 실제로 발생하며 이야기가 고조된 채로 끝나는 지점 — 이번 화 안에서 해결되거나 완결되지 않아야 하며, 다음 화가 곧바로 이어받을 수 있는 클리프행어여야 한다"',
   "}",
 ].join("\n");
 
-function buildSystemPrompt(): string {
+function buildSystemPrompt(selectedThemes: string[]): string {
+  const hasCelebrityTheme = selectedThemes.includes("연예인과의 사랑");
+
   return [
     STORY_ENGINE_CORE_RULES,
     "",
@@ -37,6 +44,15 @@ function buildSystemPrompt(): string {
     "[금지]",
     '"가족과 성공이 함께 중요해진다", "불행을 극복하여 성공한다", "스포츠와 가족 사이에서 성장한다" 와 같이 두 조각을 그냥 나열하기만 하는 모호한 계획은 금지한다.',
     "causal_connection과 intersection_event에는 누가, 무엇을, 왜 선택하고, 그 결과 무엇을 잃거나 얻는지가 구체적으로 드러나야 한다.",
+    "인생 요약에 이미 등장한 사건(첫 만남, 첫 고백, 능력을 처음 얻는 순간, 첫 성취 등)을 이번 계획에서 또다시 처음 벌어지는 사건으로 설계하지 않는다. 이번 계획의 네 사건은 인생 요약 이후, 현재 나이부터 목표 나이 사이에 새롭게 벌어지는 사건이어야 한다.",
+    "ending_effect를 이번 화를 깔끔하게 마무리짓는 결말로 설계하지 않는다. 반드시 다음 화로 이어질 새로운 사건이 막 시작되거나 위기가 고조된 채로 끝나는 클리프행어로 설계한다. 좋은 사건이든 나쁜 사건이든 상관없다.",
+    "만약 인생 요약 자체가 클리프행어(어떤 사건이 막 시작되거나 고조된 채 끝난 상태)로 끝났다면, 이번 계획의 theme1_event는 그 사건이 실제로 전개되는 것에서 시작해야 한다.",
+    "theme1_event, theme2_event, intersection_event는 서로 다른 장소와 상황에서 벌어지는 별개의 사건으로 설계한다. intersection_event를 theme2_event와 같은 성격의 상황(예: 둘 다 공개 행사, 둘 다 우연한 만남)을 반복하는 방식으로 설계하지 않는다.",
+    "",
+    ...(hasCelebrityTheme ? [CELEBRITY_PURSUIT_REMINDER, ""] : []),
+    COINCIDENCE_GUARD_REMINDER,
+    "",
+    CONTINUITY_REPEAT_GUARD_REMINDER,
   ].join("\n");
 }
 
@@ -52,12 +68,16 @@ export function buildFusionPlanPrompt(
     `theme2 (두 번째 선택 조각): ${theme2 ?? ""}`,
     `현재 나이: ${input.currentAge}`,
     `목표 나이: ${input.targetAge}`,
-    `인생 요약: ${input.lifeSummary}`,
+    `인생 요약 (이미 실제로 벌어진 과거의 사건 — 이번 계획에서 반복하지 말고 그 이후를 설계할 것): ${input.lifeSummary}`,
   ];
   if (input.regretPoint.trim().length > 0) {
     userLines.push(`가장 후회되는 지점: ${input.regretPoint}`);
   }
-  userLines.push("", "위 두 조각을 결합한 계획을 JSON으로 생성하라.");
+  userLines.push(
+    "",
+    "위 인생 요약의 마지막 상태(이미 사귀는 중인지, 결혼했는지, 능력을 이미 얻었는지, 이미 어떤 성취를 이루었는지)를 먼저 파악한 뒤, 그 상태를 그대로 이어받아 그 다음에 벌어질 새로운 사건으로만 이번 화의 계획을 세워라.",
+    "위 두 조각을 결합한 계획을 JSON으로 생성하라."
+  );
 
   if (retry !== undefined) {
     userLines.push(
@@ -70,7 +90,7 @@ export function buildFusionPlanPrompt(
   }
 
   return {
-    system: buildSystemPrompt(),
+    system: buildSystemPrompt(input.selectedThemes),
     user: userLines.join("\n"),
   };
 }

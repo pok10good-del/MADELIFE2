@@ -7,6 +7,11 @@ const REQUIRED_BOOLEAN_KEYS: (keyof StructureVerification)[] = [
   "causal_connection_preserved",
   "mere_keyword_mention",
   "independent_story_split",
+  "ending_is_unresolved_trigger",
+  "coincidence_or_unearned_introduction",
+  "celebrity_pursues_protagonist",
+  "mutual_equal_footing_detected",
+  "dialogue_conflict_present",
   "passed",
 ];
 
@@ -14,6 +19,9 @@ const REQUIRED_STRING_KEYS: (keyof StructureVerification)[] = [
   "theme1_evidence",
   "theme2_evidence",
   "intersection_evidence",
+  "ending_evidence",
+  "coincidence_evidence",
+  "mutual_equal_footing_evidence",
 ];
 
 function extractJsonObject(response: string): string {
@@ -74,6 +82,14 @@ export function parseStructureVerificationResponse(response: string): StructureV
     causal_connection_preserved: record.causal_connection_preserved as boolean,
     mere_keyword_mention: record.mere_keyword_mention as boolean,
     independent_story_split: record.independent_story_split as boolean,
+    ending_is_unresolved_trigger: record.ending_is_unresolved_trigger as boolean,
+    ending_evidence: record.ending_evidence as string,
+    coincidence_or_unearned_introduction: record.coincidence_or_unearned_introduction as boolean,
+    coincidence_evidence: record.coincidence_evidence as string,
+    celebrity_pursues_protagonist: record.celebrity_pursues_protagonist as boolean,
+    mutual_equal_footing_detected: record.mutual_equal_footing_detected as boolean,
+    mutual_equal_footing_evidence: record.mutual_equal_footing_evidence as string,
+    dialogue_conflict_present: record.dialogue_conflict_present as boolean,
     passed: record.passed as boolean,
     failure_reasons: record.failure_reasons as string[],
   };

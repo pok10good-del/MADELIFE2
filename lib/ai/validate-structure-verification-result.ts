@@ -46,6 +46,36 @@ export function recomputeStructureVerification(
     hardFailures.push(true);
     reasons.push("the two themes were written as independent, unconnected stories");
   }
+  if (!verification.ending_is_unresolved_trigger || isTrivialEvidence(verification.ending_evidence)) {
+    hardFailures.push(true);
+    reasons.push(
+      "the ending did not depict a concrete, unresolved cliffhanger trigger (either no trigger occurred, or it was fully resolved within the episode)"
+    );
+  }
+  if (verification.coincidence_or_unearned_introduction) {
+    hardFailures.push(true);
+    reasons.push(
+      `a new character or the intersection event was introduced through unexplained coincidence, or the protagonist received special treatment/interest without an established reason: ${verification.coincidence_evidence}`
+    );
+  }
+  if (!verification.celebrity_pursues_protagonist) {
+    hardFailures.push(true);
+    reasons.push(
+      "the celebrity-romance theme was present but the celebrity was not depicted pursuing the protagonist more actively than a mutual, symmetric attraction"
+    );
+  }
+  if (verification.mutual_equal_footing_detected) {
+    hardFailures.push(true);
+    reasons.push(
+      `the relationship was written as a mutual, trusting, equal-footing partnership instead of a lopsided one where the celebrity wants/longs for the protagonist more: ${verification.mutual_equal_footing_evidence}`
+    );
+  }
+  if (!verification.dialogue_conflict_present) {
+    hardFailures.push(true);
+    reasons.push(
+      "no scene contained concrete dialogue depicting rejection, lingering feelings, misunderstanding, hesitation, or conflict"
+    );
+  }
 
   const passed = hardFailures.length === 0;
 

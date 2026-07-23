@@ -91,3 +91,6 @@ export const IconBank = ({ className }: IconProps) =>
 
 export const IconArrowRight = ({ className }: IconProps) =>
   base(<path d="M14 5l7 7m0 0l-7 7m7-7H3" />, className);
+
+export const IconTrash = ({ className }: IconProps) =>
+  base(<path d="M14.74 9l-.346 9m-4.788 0L9.26 9M19.228 5.79c.324.026.647.055.97.087m-.97-.087L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.771 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12.956.397c.323-.032.646-.06.97-.086m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />, className);

@@ -10,6 +10,33 @@ import { parseStoryContentPartResponse, parseStoryContentResponse } from "@/lib/
 import { buildStructureVerificationPrompt } from "@/lib/ai/build-structure-verification-prompt";
 import { parseStructureVerificationResponse } from "@/lib/ai/parse-structure-verification-response";
 import { recomputeStructureVerification } from "@/lib/ai/validate-structure-verification-result";
+import { findBannedCoincidencePhrase } from "@/lib/ai/detect-banned-coincidence-phrases";
+
+function bannedPhraseVerification(bannedPhrase: string): StructureVerification {
+  return {
+    theme1_event_present: false,
+    theme1_evidence: "",
+    theme2_event_present: false,
+    theme2_evidence: "",
+    intersection_event_present: false,
+    intersection_evidence: "",
+    causal_connection_preserved: false,
+    mere_keyword_mention: false,
+    independent_story_split: false,
+    ending_is_unresolved_trigger: false,
+    ending_evidence: "",
+    coincidence_or_unearned_introduction: true,
+    coincidence_evidence: `금지된 우연 표현 "${bannedPhrase}" 발견`,
+    celebrity_pursues_protagonist: true,
+    mutual_equal_footing_detected: false,
+    mutual_equal_footing_evidence: "",
+    dialogue_conflict_present: true,
+    passed: false,
+    failure_reasons: [
+      `generated content contains a banned coincidence phrase ("${bannedPhrase}"); rewrite the introduction of this event/character with an explicit causal reason instead of chance`,
+    ],
+  };
+}
 
 export const MAX_CONTENT_ATTEMPTS = 3;
 
@@ -78,6 +105,13 @@ export async function generateVerifiedStoryContent(
       retry
     );
     contentCallCount += partCallCount;
+
+    const bannedPhrase = findBannedCoincidencePhrase(assembled.content);
+    if (bannedPhrase !== undefined) {
+      previousContent = assembled;
+      previousVerification = bannedPhraseVerification(bannedPhrase);
+      continue;
+    }
 
     const verificationPrompt = buildStructureVerificationPrompt(plan, assembled);
     const rawVerification = await provider.generateWithSystem(

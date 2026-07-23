@@ -1,6 +1,11 @@
 import type { FusionPlan, ParsedStoryContent, StoryGenerationInput } from "@/lib/ai/story-generation.types";
 import type { ChatPrompt } from "@/lib/ai/chat-prompt";
-import { STORY_ENGINE_CORE_RULES } from "@/lib/ai/prompts/story-engine-rules";
+import {
+  CELEBRITY_PURSUIT_REMINDER,
+  COINCIDENCE_GUARD_REMINDER,
+  CONTINUITY_REPEAT_GUARD_REMINDER,
+  STORY_ENGINE_CORE_RULES,
+} from "@/lib/ai/prompts/story-engine-rules";
 import { CHOICE_DICTIONARY } from "@/lib/ai/prompts/choice-dictionary";
 
 export const STORY_PART_TARGET_CHARS = 1200;
@@ -13,8 +18,14 @@ interface StoryPartSpec {
 const STORY_PART_SPECS: StoryPartSpec[] = [
   { planField: "theme1_event", focusLabel: "첫 번째 조각(theme1)이 실제 사건으로 시작되는 도입부" },
   { planField: "theme2_event", focusLabel: "두 번째 조각(theme2)이 실제 사건으로 전개되는 부분" },
-  { planField: "intersection_event", focusLabel: "두 조각이 직접 만나거나 충돌하는 핵심 장면" },
-  { planField: "ending_effect", focusLabel: "두 조각의 결합이 이번 화 마지막에 남기는 변화와 마무리" },
+  {
+    planField: "intersection_event",
+    focusLabel: "두 조각이 직접 만나거나 충돌하는 핵심 장면 — 동시에 다음 화로 이어질 사건의 조짐을 자연스럽게 암시",
+  },
+  {
+    planField: "ending_effect",
+    focusLabel: "암시된 사건의 트리거가 실제로 발생하며 이야기가 고조된 채로 끝나는 부분 (다음 화로 이어질 클리프행어, 완결 아님)",
+  },
 ];
 
 export const STORY_PART_COUNT = STORY_PART_SPECS.length;
@@ -24,10 +35,11 @@ export interface StoryContentRetryContext {
   failureReasons: string[];
 }
 
-function buildSystemPrompt(partIndex: number): string {
+function buildSystemPrompt(partIndex: number, selectedThemes: string[]): string {
   const spec = STORY_PART_SPECS[partIndex];
   const isFirstPart = partIndex === 0;
   const isLastPart = partIndex === STORY_PART_SPECS.length - 1;
+  const hasCelebrityTheme = selectedThemes.includes("연예인과의 사랑");
 
   return [
     STORY_ENGINE_CORE_RULES,
@@ -39,16 +51,22 @@ function buildSystemPrompt(partIndex: number): string {
     `이번에 작성할 파트는 "${spec.focusLabel}"에 해당한다.`,
     `이번 파트는 약 ${STORY_PART_TARGET_CHARS}자 내외 분량으로 작성한다.`,
     isFirstPart
-      ? "이전 파트가 없으므로 이번 화의 도입부로 자연스럽게 시작한다."
+      ? "이전 파트가 없으므로 이번 화의 도입부로 자연스럽게 시작한다. 만약 입력 정보의 '이전 화 상태(인생 요약)'가 어떤 사건이 막 시작되거나 고조된 채로 끝났다면(클리프행어), 아무 일 없었다는 듯 건너뛰지 말고 그 상황을 곧바로 이어받아 전개한다."
       : "[이전 파트까지의 내용]에 곧바로 이어지는 장면이다. 인물과 설정을 처음부터 다시 설명하지 않고 자연스럽게 이어서 작성한다.",
     isLastPart
-      ? "이번 파트는 화의 마지막 파트이므로 자연스럽게 여운을 남기며 마무리한다."
+      ? "이번 파트는 화의 마지막 파트다. 여기서 화를 깔끔하게 완결짓거나 안정적으로 마무리하지 않는다. 3번째 파트에서 암시된 사건의 트리거가 실제로 발생하며 이야기가 고조된 채로 끝나야 하며, 그 사건은 이번 화 안에서 해결하지 않는다. 다음 화가 곧바로 이어서 그 사건을 전개할 수 있도록 흥미진진한 상태로 끊는다."
       : "이번 파트가 끝나도 이야기는 다음 파트로 계속되므로 화 전체를 마무리 짓지 않는다.",
     "결합 계획에 없는 새로운 주인공 인생을 임의로 만들지 않는다.",
+    "입력 정보의 '이전 화 상태(인생 요약)'에 이미 등장한 사건(첫 만남, 첫 고백, 능력을 처음 얻는 순간, 첫 성취 등)을 이번 화에서 다시 처음 벌어지는 사건처럼 반복해서 쓰지 않는다. 그 사건들은 이미 지난 일이며, 이번 화는 그 이후에 새롭게 벌어지는 사건만 다룬다.",
     "네 파트를 합쳤을 때 두 개의 독립된 단편처럼 분리되어서는 안 된다.",
     "테마 이름을 단순히 언급하는 것으로 반영을 대신하지 않는다.",
     "어느 한 조각을 분위기나 배경으로만 소비하지 않는다.",
     "두 조각의 관계는 계획의 causal_connection과 일치해야 한다.",
+    "",
+    ...(hasCelebrityTheme ? [CELEBRITY_PURSUIT_REMINDER, ""] : []),
+    COINCIDENCE_GUARD_REMINDER,
+    "",
+    CONTINUITY_REPEAT_GUARD_REMINDER,
     "",
     "[출력 형식]",
     "각 라벨은 마크다운 강조(별표, 굵게 등) 없이 줄 맨 앞에 그대로 작성한다.",
@@ -86,7 +104,7 @@ export function buildStoryContentPartPrompt(
     `목표 나이: ${input.targetAge}`,
     `이번 화 전체 시간 범위: ${episodeYearSpan}년 (4개 파트로 나누어 표현)`,
     `선택한 테마: ${input.selectedThemes.join(", ")}`,
-    `이전 화 상태(인생 요약): ${input.lifeSummary}`,
+    `이전 화 상태(인생 요약 — 이미 실제로 벌어진 과거의 사건, 반복 금지): ${input.lifeSummary}`,
   ];
   if (input.regretPoint.trim().length > 0) {
     userLines.push(`가장 후회되는 지점: ${input.regretPoint}`);
@@ -113,7 +131,7 @@ export function buildStoryContentPartPrompt(
   }
 
   return {
-    system: buildSystemPrompt(partIndex),
+    system: buildSystemPrompt(partIndex, input.selectedThemes),
     user: userLines.join("\n"),
   };
 }

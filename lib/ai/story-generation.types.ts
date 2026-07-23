@@ -52,6 +52,14 @@ export interface StructureVerification {
   causal_connection_preserved: boolean;
   mere_keyword_mention: boolean;
   independent_story_split: boolean;
+  ending_is_unresolved_trigger: boolean;
+  ending_evidence: string;
+  coincidence_or_unearned_introduction: boolean;
+  coincidence_evidence: string;
+  celebrity_pursues_protagonist: boolean;
+  mutual_equal_footing_detected: boolean;
+  mutual_equal_footing_evidence: string;
+  dialogue_conflict_present: boolean;
   passed: boolean;
   failure_reasons: string[];
 }

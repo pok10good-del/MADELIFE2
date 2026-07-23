@@ -98,9 +98,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const loggingOutRef = useRef(false);
   const supabase = useMemo(() => createClient(), []);
-  const tomorrow = useMemo(() => {
+  const todayStart = useMemo(() => {
     const date = new Date();
-    date.setDate(date.getDate() + 1);
     date.setHours(0, 0, 0, 0);
     return date;
   }, []);
@@ -191,6 +190,16 @@ export default function DashboardPage() {
     let currentRow: StoriesRow | null = null;
 
     try {
+      const existingStories = await getUserStories(supabase, user.id);
+      if (existingStories.length > 0) {
+        setSaveError(
+          "이미 시작된 이야기가 있어 새로 시작할 수 없습니다. 보관소에서 이어서 확인해주세요."
+        );
+        setStage("idle");
+        router.replace("/archive");
+        return;
+      }
+
       const storyInsert = mapStoryInputToStoriesInsert({
         storyText,
         birthDate: selectedDay,
@@ -314,7 +323,7 @@ export default function DashboardPage() {
                 }
                 placeholder="YYYY년 MM월 DD일"
               />
-              <DateCalendar value={selectedStoryDate} onChange={setSelectedStoryDate} minDate={tomorrow} />
+              <DateCalendar value={selectedStoryDate} onChange={setSelectedStoryDate} minDate={todayStart} />
             </section>
           </div>
 

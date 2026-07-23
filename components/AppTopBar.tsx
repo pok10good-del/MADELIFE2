@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { IconBell } from "@/app/dashboard/icons";
 
@@ -11,7 +12,9 @@ export function AppTopBar() {
 
   return (
     <header className="mml-topbar">
-      <div className="mml-topbar-logo gold-text">MAGIC MADE LIFE</div>
+      <Link href="/dashboard" className="mml-topbar-logo gold-text">
+        MAGIC MADE LIFE
+      </Link>
       <div className="mml-topbar-right">
         <IconBell className="mml-bell" />
         <button type="button" className="mml-upgrade-pill">

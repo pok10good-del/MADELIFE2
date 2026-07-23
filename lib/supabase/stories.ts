@@ -48,6 +48,17 @@ export async function updateStory(
   return data as StoriesRow;
 }
 
+export async function deleteAllUserStories(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<void> {
+  const { error } = await supabase.from("stories").delete().eq("user_id", userId);
+
+  if (error) {
+    throw new Error(`Failed to delete stories: ${error.message}`);
+  }
+}
+
 export async function getUserStories(
   supabase: SupabaseClient,
   userId: string
