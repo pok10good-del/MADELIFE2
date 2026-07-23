@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/cron/generate-next-episode", "schedule": "0 11 * * *" }
+  ]
+}

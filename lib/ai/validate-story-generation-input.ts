@@ -50,10 +50,6 @@ export function validateStoryGenerationInput(
     errors.push(`lifeSummary must be at least ${MIN_LIFE_SUMMARY_LENGTH} characters`);
   }
 
-  if (!isNonEmptyTrimmed(input.regretPoint)) {
-    errors.push("regretPoint is required");
-  }
-
   if (errors.length === 0) {
     return { valid: true, errors: [] };
   }

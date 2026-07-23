@@ -19,6 +19,8 @@ export interface StoriesRow {
   generated_start_age: number | null;
   generated_end_age: number | null;
   generated_themes: string[] | null;
+  episode_number: number;
+  read_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -40,6 +42,8 @@ export interface StoriesInsert {
   generated_start_age?: number | null;
   generated_end_age?: number | null;
   generated_themes?: string[] | null;
+  episode_number?: number;
+  read_at?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -61,6 +65,8 @@ export interface StoriesUpdate {
   generated_start_age?: number | null;
   generated_end_age?: number | null;
   generated_themes?: string[] | null;
+  episode_number?: number;
+  read_at?: string | null;
   created_at?: string;
   updated_at?: string;
 }

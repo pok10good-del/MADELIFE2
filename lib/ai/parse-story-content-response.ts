@@ -34,3 +34,14 @@ export function parseStoryContentResponse(response: string): ParsedStoryContent 
 
   return { title, content };
 }
+
+export function parseStoryContentPartResponse(response: string): string {
+  const sections = extractSections(response);
+
+  const content = sections.CONTENT;
+  if (!content || content.length === 0) {
+    throw new Error("CONTENT is missing from the AI response");
+  }
+
+  return content;
+}

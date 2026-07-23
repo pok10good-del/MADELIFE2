@@ -1,32 +1,34 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { createClient } from "@/lib/supabase/client";
-import { saveStory, updateStory, getUserStories } from "@/lib/supabase/stories";
+import { getUserStories, saveStory, updateStory } from "@/lib/supabase/stories";
 import { mapStoryInputToStoriesInsert } from "@/lib/supabase/stories.mapper";
-import type { StoriesRow, StoriesStatus } from "@/lib/supabase/stories.types";
+import type { StoriesRow } from "@/lib/supabase/stories.types";
 import { buildStoryGenerationInput } from "@/lib/story-generation/build-story-generation-input";
+import {
+  buildContinuationStoriesInsert,
+  buildContinuationStoryGenerationInput,
+} from "@/lib/story-generation/build-continuation-story-generation-input";
 import { mapStoryGenerationResultToStoriesUpdate } from "@/lib/story-generation/map-generation-result-to-stories-update";
-import type { StoryGenerationResult } from "@/lib/ai/story-generation.types";
+import type { StoryGenerationInput, StoryGenerationResult } from "@/lib/ai/story-generation.types";
+import { AppTopBar } from "@/components/AppTopBar";
+import { AppSidebar } from "@/components/AppSidebar";
+import { DateCalendar } from "./DateCalendar";
 import "./dashboard.css";
 import {
-  IconArchive,
   IconArrowRight,
   IconBank,
-  IconBell,
   IconBook,
   IconCalendar,
   IconCloudBolt,
   IconGem,
-  IconHeadset,
   IconHeart,
-  IconLogout,
   IconMoney,
   IconMoon,
   IconQuill,
-  IconSettings,
   IconShield,
   IconSmile,
   IconSoccer,
@@ -37,29 +39,6 @@ import {
 
 const STORY_MIN_LENGTH = 300;
 const MAX_FRAGMENTS = 2;
-const DOW = ["일", "월", "화", "수", "목", "금", "토"];
-const SELECTED_STORY_ID_KEY = "mml:selectedStoryId";
-type StatusFilter = "전체" | StoriesStatus;
-const STATUS_FILTERS: StatusFilter[] = ["전체", "pending", "processing", "active", "completed", "failed"];
-type SortOrder = "최신순" | "오래된순";
-const SORT_ORDERS: SortOrder[] = ["최신순", "오래된순"];
-type DateFilter = "전체" | "오늘" | "최근 7일" | "최근 30일";
-const DATE_FILTERS: DateFilter[] = ["전체", "오늘", "최근 7일", "최근 30일"];
-
-function isSameLocalDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-  );
-}
-
-function isWithinDateFilter(createdAt: string, filter: DateFilter, now: Date): boolean {
-  if (filter === "전체") return true;
-  const createdDate = new Date(createdAt);
-  if (filter === "오늘") return isSameLocalDay(createdDate, now);
-  const days = filter === "최근 7일" ? 7 : 30;
-  const cutoff = now.getTime() - days * 24 * 60 * 60 * 1000;
-  return createdDate.getTime() >= cutoff;
-}
 
 const FREE_FRAGMENTS = [
   { id: "success", label: "성공", Icon: IconTrophy },
@@ -114,107 +93,28 @@ const PAID_PATHS = [
 
 const SPORT_OPTIONS = ["축구", "야구", "농구"];
 
-function buildCalendarGrid(year: number, month: number) {
-  const firstDow = new Date(year, month, 1).getDay();
-  const totalDays = new Date(year, month + 1, 0).getDate();
-  const prevMonthDays = new Date(year, month, 0).getDate();
-  const cells: { day: number; offset: -1 | 0 | 1 }[] = [];
-
-  for (let i = 0; i < firstDow; i++) {
-    cells.push({ day: prevMonthDays - firstDow + 1 + i, offset: -1 });
-  }
-  for (let d = 1; d <= totalDays; d++) {
-    cells.push({ day: d, offset: 0 });
-  }
-  let nextDay = 1;
-  while (cells.length % 7 !== 0) {
-    cells.push({ day: nextDay++, offset: 1 });
-  }
-  return cells;
-}
-
-function formatDateOnly(value: string): string {
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString();
-}
-
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString();
-}
-
 export default function DashboardPage() {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
   const loggingOutRef = useRef(false);
   const supabase = useMemo(() => createClient(), []);
+  const tomorrow = useMemo(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }, []);
 
   const [storyText, setStoryText] = useState("");
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
-  const today = useMemo(() => new Date(), []);
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedStoryDate, setSelectedStoryDate] = useState<Date | null>(null);
-  const [storyViewYear, setStoryViewYear] = useState(today.getFullYear());
-  const [storyViewMonth, setStoryViewMonth] = useState(today.getMonth());
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [sportChoice, setSportChoice] = useState<string | null>(null);
   const [celebrityName, setCelebrityName] = useState("");
-  const [regretPoint, setRegretPoint] = useState("");
   const [shareOption, setShareOption] = useState<"private" | "friends" | "public">("private");
-  const [submitted, setSubmitted] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [stage, setStage] = useState<"idle" | "episode1" | "episode2" | "done">("idle");
+  const [checkingExisting, setCheckingExisting] = useState(true);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [stories, setStories] = useState<StoriesRow[]>([]);
-  const [storiesLoading, setStoriesLoading] = useState(false);
-  const [storiesError, setStoriesError] = useState<string | null>(null);
-  const [selectedStory, setSelectedStory] = useState<StoriesRow | null>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("전체");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("최신순");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("전체");
-
-  const fetchStories = async (userId: string) => {
-    setStoriesLoading(true);
-    setStoriesError(null);
-    try {
-      const rows = await getUserStories(supabase, userId);
-      setStories(rows);
-
-      const savedId = localStorage.getItem(SELECTED_STORY_ID_KEY);
-      const restored = savedId ? rows.find((row) => row.id === savedId) ?? null : null;
-      setSelectedStory(restored);
-    } catch (error) {
-      setStoriesError(error instanceof Error ? error.message : "목록을 불러오지 못했습니다.");
-    } finally {
-      setStoriesLoading(false);
-    }
-  };
-
-  const handleDeselectStory = () => {
-    setSelectedStory(null);
-    localStorage.removeItem(SELECTED_STORY_ID_KEY);
-  };
-
-  const handleResetFilters = () => {
-    setSearchQuery("");
-    setStatusFilter("전체");
-    setSortOrder("최신순");
-    setDateFilter("전체");
-  };
-
-  const sortedStories = useMemo(() => {
-    const normalizedSearchQuery = searchQuery.trim().toLowerCase();
-    const now = new Date();
-    const filtered = stories
-      .filter((story) => statusFilter === "전체" || story.status === statusFilter)
-      .filter((story) => story.story_text.toLowerCase().includes(normalizedSearchQuery))
-      .filter((story) => isWithinDateFilter(story.created_at, dateFilter, now));
-    return [...filtered].sort((a, b) => {
-      const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      return sortOrder === "최신순" ? -diff : diff;
-    });
-  }, [stories, searchQuery, statusFilter, dateFilter, sortOrder]);
 
   useEffect(() => {
     if (!loading && !user && !loggingOutRef.current) {
@@ -223,13 +123,29 @@ export default function DashboardPage() {
   }, [loading, user, router]);
 
   useEffect(() => {
-    if (user) {
-      fetchStories(user.id);
-    }
+    if (!user) return;
+
+    let cancelled = false;
+    getUserStories(supabase, user.id)
+      .then((rows) => {
+        if (cancelled) return;
+        if (rows.length > 0) {
+          router.replace("/archive");
+          return;
+        }
+        setCheckingExisting(false);
+      })
+      .catch(() => {
+        if (!cancelled) setCheckingExisting(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  if (loading || !user) {
+  if (loading || !user || checkingExisting) {
     return <div className="dashboard-page">불러오는 중...</div>;
   }
 
@@ -247,61 +163,32 @@ export default function DashboardPage() {
     });
   };
 
-  const handlePrevMonth = () => {
-    if (viewMonth === 0) {
-      setViewYear((y) => y - 1);
-      setViewMonth(11);
-    } else {
-      setViewMonth((m) => m - 1);
-    }
-  };
-
-  const handleNextMonth = () => {
-    if (viewMonth === 11) {
-      setViewYear((y) => y + 1);
-      setViewMonth(0);
-    } else {
-      setViewMonth((m) => m + 1);
-    }
-  };
-
-  const handleStoryPrevMonth = () => {
-    if (storyViewMonth === 0) {
-      setStoryViewYear((y) => y - 1);
-      setStoryViewMonth(11);
-    } else {
-      setStoryViewMonth((m) => m - 1);
-    }
-  };
-
-  const handleStoryNextMonth = () => {
-    if (storyViewMonth === 11) {
-      setStoryViewYear((y) => y + 1);
-      setStoryViewMonth(0);
-    } else {
-      setStoryViewMonth((m) => m + 1);
-    }
-  };
-
-  const calendarCells = buildCalendarGrid(viewYear, viewMonth);
-  const storyCalendarCells = buildCalendarGrid(storyViewYear, storyViewMonth);
-
-  const displayName = user.user_metadata?.full_name ?? user.email ?? "";
-  const avatarUrl = user.user_metadata?.avatar_url as string | undefined;
-  const initial = displayName.charAt(0).toUpperCase();
-
   const canSubmit =
     storyText.trim().length >= STORY_MIN_LENGTH &&
-    selectedPaths.length > 0 &&
-    regretPoint.trim().length > 0;
+    selectedPaths.length > 0;
+
+  const requestStoryGeneration = async (input: StoryGenerationInput): Promise<StoryGenerationResult> => {
+    const response = await fetch("/api/story/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? "이야기 생성 중 오류가 발생했습니다.");
+    }
+
+    return (await response.json()) as StoryGenerationResult;
+  };
 
   const handleSubmit = async () => {
-    if (!canSubmit || isSaving || submitted) return;
+    if (!canSubmit || stage !== "idle") return;
 
-    setIsSaving(true);
+    setStage("episode1");
     setSaveError(null);
 
-    let savedStory: StoriesRow | null = null;
+    let currentRow: StoriesRow | null = null;
 
     try {
       const storyInsert = mapStoryInputToStoriesInsert({
@@ -312,98 +199,59 @@ export default function DashboardPage() {
         sportChoice,
         celebrityName,
         shareOption,
-        regretPoint,
+        regretPoint: "",
       });
-      savedStory = await saveStory(supabase, user.id, { ...storyInsert, user_id: user.id });
-      setSubmitted(true);
-
-      const generationInput = buildStoryGenerationInput(savedStory);
-      const response = await fetch("/api/story/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(generationInput),
+      currentRow = await saveStory(supabase, user.id, {
+        ...storyInsert,
+        user_id: user.id,
+        episode_number: 1,
       });
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error ?? "이야기 생성 중 오류가 발생했습니다.");
-      }
+      const episode1Input = buildStoryGenerationInput(currentRow);
+      const episode1Result = await requestStoryGeneration(episode1Input);
+      const episode1Row = await updateStory(
+        supabase,
+        user.id,
+        currentRow.id,
+        mapStoryGenerationResultToStoriesUpdate(episode1Result)
+      );
+      currentRow = episode1Row;
 
-      const result = (await response.json()) as StoryGenerationResult;
+      setStage("episode2");
+
+      const episode2Insert = buildContinuationStoriesInsert(episode1Row, episode1Row, 2);
+      currentRow = await saveStory(supabase, user.id, { ...episode2Insert, user_id: user.id });
+
+      const episode2Input = buildContinuationStoryGenerationInput(episode1Row, episode1Row);
+      const episode2Result = await requestStoryGeneration(episode2Input);
       await updateStory(
         supabase,
         user.id,
-        savedStory.id,
-        mapStoryGenerationResultToStoriesUpdate(result)
+        currentRow.id,
+        mapStoryGenerationResultToStoriesUpdate(episode2Result)
       );
+
+      setStage("done");
+      router.push("/archive");
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "저장 중 오류가 발생했습니다.");
-      if (savedStory) {
+      if (currentRow) {
         try {
-          await updateStory(supabase, user.id, savedStory.id, { status: "failed" });
+          await updateStory(supabase, user.id, currentRow.id, { status: "failed" });
         } catch {
           // best-effort status update; original error is already surfaced above
         }
       }
-    } finally {
-      await fetchStories(user.id);
-      setIsSaving(false);
+      setStage("idle");
     }
   };
 
   return (
     <div className="mml">
-      <header className="mml-topbar">
-        <div className="mml-topbar-logo gold-text">MAGIC MADE LIFE</div>
-        <div className="mml-topbar-right">
-          <IconBell className="mml-bell" />
-          <button type="button" className="mml-upgrade-pill">
-            프리미엄 업그레이드
-          </button>
-          <div className="mml-avatar">
-            {avatarUrl ? <img src={avatarUrl} alt="" width={34} height={34} /> : initial || "U"}
-          </div>
-        </div>
-      </header>
+      <AppTopBar />
 
       <div className="mml-body">
-        <aside className="mml-sidebar">
-          <div className="mml-sidebar-heading">
-            <div className="mml-sidebar-heading-icon">
-              <IconQuill />
-            </div>
-            <div>
-              <div className="mml-sidebar-heading-title">기록자</div>
-              <div className="mml-sidebar-heading-sub">운명의 여행자</div>
-            </div>
-          </div>
-
-          <nav className="mml-sidebar-nav">
-            <button type="button" className="active">
-              <IconShield /> 기록 상태
-            </button>
-            <button type="button">
-              <IconArchive /> 과거 기록 보관소
-            </button>
-            <button type="button">
-              <IconSettings /> 설정
-            </button>
-          </nav>
-
-          <div className="mml-sidebar-spacer" />
-
-          <div className="mml-sidebar-bottom">
-            <button type="button" className="mml-sidebar-upgrade-btn">
-              프리미엄으로 업그레이드
-            </button>
-            <button type="button" className="mml-sidebar-link">
-              <IconHeadset /> 고객센터
-            </button>
-            <button type="button" className="mml-sidebar-link" onClick={handleLogout}>
-              <IconLogout /> 로그아웃
-            </button>
-          </div>
-        </aside>
+        <AppSidebar active="status" onLogout={handleLogout} />
 
         <main className="mml-main">
           <section className="mml-hero">
@@ -434,19 +282,6 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          <section className="mml-panel">
-            <h2 className="mml-panel-title">
-              <IconQuill /> 가장 후회되는 지점을 알려주세요.
-            </h2>
-            <p className="mml-panel-sub">인생에서 가장 후회되는 순간이나 선택을 적어주세요.</p>
-            <textarea
-              className="mml-textarea"
-              placeholder="가장 후회되는 순간이나 선택을 자유롭게 작성해주세요..."
-              value={regretPoint}
-              onChange={(e) => setRegretPoint(e.target.value)}
-            />
-          </section>
-
           <div className="mml-grid-2">
             <section className="mml-panel">
               <h3 className="mml-field-label">
@@ -462,43 +297,7 @@ export default function DashboardPage() {
                 }
                 placeholder="YYYY년 MM월 DD일"
               />
-              <div className="mml-calendar">
-                <div className="mml-calendar-head">
-                  <button type="button" onClick={handlePrevMonth}>
-                    ‹
-                  </button>
-                  <span>
-                    {viewYear}년 {viewMonth + 1}월
-                  </span>
-                  <button type="button" onClick={handleNextMonth}>
-                    ›
-                  </button>
-                </div>
-                <div className="mml-calendar-grid">
-                  {DOW.map((d) => (
-                    <div key={d} className="dow">
-                      {d}
-                    </div>
-                  ))}
-                  {calendarCells.map((cell, i) => {
-                    const isSelected =
-                      cell.offset === 0 &&
-                      selectedDay?.getFullYear() === viewYear &&
-                      selectedDay?.getMonth() === viewMonth &&
-                      selectedDay?.getDate() === cell.day;
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        className={`${cell.offset !== 0 ? "muted" : ""}${isSelected ? " selected" : ""}`}
-                        onClick={() => cell.offset === 0 && setSelectedDay(new Date(viewYear, viewMonth, cell.day))}
-                      >
-                        {cell.day}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <DateCalendar value={selectedDay} onChange={setSelectedDay} />
             </section>
 
             <section className="mml-panel">
@@ -515,46 +314,7 @@ export default function DashboardPage() {
                 }
                 placeholder="YYYY년 MM월 DD일"
               />
-              <div className="mml-calendar">
-                <div className="mml-calendar-head">
-                  <button type="button" onClick={handleStoryPrevMonth}>
-                    ‹
-                  </button>
-                  <span>
-                    {storyViewYear}년 {storyViewMonth + 1}월
-                  </span>
-                  <button type="button" onClick={handleStoryNextMonth}>
-                    ›
-                  </button>
-                </div>
-                <div className="mml-calendar-grid">
-                  {DOW.map((d) => (
-                    <div key={d} className="dow">
-                      {d}
-                    </div>
-                  ))}
-                  {storyCalendarCells.map((cell, i) => {
-                    const isSelected =
-                      cell.offset === 0 &&
-                      selectedStoryDate?.getFullYear() === storyViewYear &&
-                      selectedStoryDate?.getMonth() === storyViewMonth &&
-                      selectedStoryDate?.getDate() === cell.day;
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        className={`${cell.offset !== 0 ? "muted" : ""}${isSelected ? " selected" : ""}`}
-                        onClick={() =>
-                          cell.offset === 0 &&
-                          setSelectedStoryDate(new Date(storyViewYear, storyViewMonth, cell.day))
-                        }
-                      >
-                        {cell.day}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <DateCalendar value={selectedStoryDate} onChange={setSelectedStoryDate} minDate={tomorrow} />
             </section>
           </div>
 
@@ -615,7 +375,11 @@ export default function DashboardPage() {
                     <p className="mml-paid-card-desc">{desc}</p>
 
                     {hasSport && (
-                      <div className="mml-sub-options" onClick={(e) => e.stopPropagation()}>
+                      <div
+                        className="mml-sub-options"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
                         {SPORT_OPTIONS.map((sport) => (
                           <button
                             key={sport}
@@ -630,7 +394,7 @@ export default function DashboardPage() {
                     )}
 
                     {hasCelebrity && (
-                      <div onClick={(e) => e.stopPropagation()}>
+                      <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                         <input
                           className="mml-inline-input"
                           placeholder="연예인 이름을 입력해주세요."
@@ -680,261 +444,37 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          <button
-            type="button"
-            className="mml-submit-btn"
-            disabled={!canSubmit || isSaving || submitted}
-            onClick={handleSubmit}
-          >
-            {isSaving ? "저장 중..." : submitted ? "전송 완료" : "미래로 향한 메시지 보내기"}
-            <IconArrowRight />
-          </button>
+          {stage === "idle" || stage === "done" ? (
+            <button
+              type="button"
+              className="mml-submit-btn"
+              disabled={!canSubmit || stage === "done"}
+              onClick={handleSubmit}
+            >
+              {stage === "done" ? "전송 완료" : "미래로 향한 메시지 보내기"}
+              <IconArrowRight />
+            </button>
+          ) : (
+            <div className="mml-generating-panel">
+              <span className="mml-generating-text">
+                미래에서 편지를 받는 중입니다
+                <span className="mml-generating-dots">
+                  <span>.</span>
+                  <span>.</span>
+                  <span>.</span>
+                </span>
+              </span>
+              <span className="mml-generating-sub">
+                {stage === "episode1" ? "1화를 쓰는 중입니다..." : "2화를 쓰는 중입니다..."}
+              </span>
+            </div>
+          )}
           {saveError && (
             <p className="mml-footnote" style={{ color: "#e5484d" }}>
               {saveError}
             </p>
           )}
           <p className="mml-footnote">모든 정보는 안전하게 암호화되어, AI 분석에 최적화 되어만 사용됩니다.</p>
-
-          <section className="mml-panel">
-            <h2 className="mml-panel-title">
-              <IconArchive /> 저장된 스토리
-            </h2>
-
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="스토리 내용 검색"
-              style={{
-                width: "100%",
-                boxSizing: "border-box",
-                border: "1px solid rgba(255, 255, 255, 0.12)",
-                borderRadius: 8,
-                padding: "8px 12px",
-                fontSize: 13,
-                background: "transparent",
-                color: "inherit",
-                marginBottom: 12,
-              }}
-            />
-
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-              {STATUS_FILTERS.map((filter) => (
-                <button
-                  key={filter}
-                  type="button"
-                  onClick={() => setStatusFilter(filter)}
-                  style={{
-                    border:
-                      filter === statusFilter
-                        ? "1px solid var(--gold)"
-                        : "1px solid rgba(255, 255, 255, 0.12)",
-                    borderRadius: 999,
-                    padding: "4px 12px",
-                    fontSize: 12,
-                    background: filter === statusFilter ? "rgba(212, 175, 55, 0.1)" : "transparent",
-                    color: "inherit",
-                    cursor: "pointer",
-                  }}
-                >
-                  {filter}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-              {SORT_ORDERS.map((order) => (
-                <button
-                  key={order}
-                  type="button"
-                  onClick={() => setSortOrder(order)}
-                  style={{
-                    border:
-                      order === sortOrder
-                        ? "1px solid var(--gold)"
-                        : "1px solid rgba(255, 255, 255, 0.12)",
-                    borderRadius: 999,
-                    padding: "4px 12px",
-                    fontSize: 12,
-                    background: order === sortOrder ? "rgba(212, 175, 55, 0.1)" : "transparent",
-                    color: "inherit",
-                    cursor: "pointer",
-                  }}
-                >
-                  {order}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-              {DATE_FILTERS.map((filter) => (
-                <button
-                  key={filter}
-                  type="button"
-                  onClick={() => setDateFilter(filter)}
-                  style={{
-                    border:
-                      filter === dateFilter
-                        ? "1px solid var(--gold)"
-                        : "1px solid rgba(255, 255, 255, 0.12)",
-                    borderRadius: 999,
-                    padding: "4px 12px",
-                    fontSize: 12,
-                    background: filter === dateFilter ? "rgba(212, 175, 55, 0.1)" : "transparent",
-                    color: "inherit",
-                    cursor: "pointer",
-                  }}
-                >
-                  {filter}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-              <button
-                type="button"
-                onClick={handleResetFilters}
-                style={{
-                  background: "transparent",
-                  border: "1px solid rgba(255, 255, 255, 0.2)",
-                  borderRadius: 6,
-                  padding: "4px 10px",
-                  fontSize: 12,
-                  color: "inherit",
-                  cursor: "pointer",
-                  opacity: 0.8,
-                }}
-              >
-                조건 초기화
-              </button>
-            </div>
-
-            {storiesLoading && <p className="mml-footnote">불러오는 중...</p>}
-
-            {storiesError && (
-              <p className="mml-footnote" style={{ color: "#e5484d" }}>
-                {storiesError}
-              </p>
-            )}
-
-            {!storiesLoading && !storiesError && stories.length === 0 && (
-              <p className="mml-footnote">저장된 스토리가 없습니다.</p>
-            )}
-
-            {!storiesLoading && !storiesError && stories.length > 0 && sortedStories.length === 0 && (
-              <p className="mml-footnote">조건에 맞는 스토리가 없습니다.</p>
-            )}
-
-            {!storiesLoading && !storiesError && sortedStories.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {sortedStories.map((story) => {
-                  const isSelected = story.id === selectedStory?.id;
-                  return (
-                    <div
-                      key={story.id}
-                      onClick={() => {
-                        setSelectedStory(story);
-                        localStorage.setItem(SELECTED_STORY_ID_KEY, story.id);
-                      }}
-                      style={{
-                        border: isSelected
-                          ? "1px solid var(--gold)"
-                          : "1px solid rgba(255, 255, 255, 0.12)",
-                        borderRadius: 10,
-                        padding: "12px 16px",
-                        cursor: "pointer",
-                        backgroundColor: isSelected ? "rgba(212, 175, 55, 0.1)" : "transparent",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          fontSize: 13,
-                          opacity: 0.8,
-                        }}
-                      >
-                        <span>{story.story_start_date}</span>
-                        <span>{story.status}</span>
-                      </div>
-                      <p style={{ margin: "8px 0" }}>
-                        {story.story_text.length > 120
-                          ? `${story.story_text.slice(0, 120)}...`
-                          : story.story_text}
-                      </p>
-                      <div style={{ fontSize: 12, opacity: 0.6 }}>{story.created_at}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {selectedStory && (
-              <div
-                style={{
-                  marginTop: 16,
-                  padding: "12px 16px",
-                  border: "1px solid rgba(255, 255, 255, 0.2)",
-                  borderRadius: 10,
-                  background: "rgba(255, 255, 255, 0.03)",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-                  <button
-                    type="button"
-                    onClick={handleDeselectStory}
-                    style={{
-                      background: "transparent",
-                      border: "1px solid rgba(255, 255, 255, 0.2)",
-                      borderRadius: 6,
-                      padding: "4px 10px",
-                      fontSize: 12,
-                      color: "inherit",
-                      cursor: "pointer",
-                      opacity: 0.8,
-                    }}
-                  >
-                    선택 해제
-                  </button>
-                </div>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "auto 1fr",
-                    gap: "6px 12px",
-                    fontSize: 13,
-                    marginBottom: 12,
-                  }}
-                >
-                  <span style={{ opacity: 0.6 }}>시작일</span>
-                  <span>{formatDateOnly(selectedStory.story_start_date)}</span>
-                  <span style={{ opacity: 0.6 }}>상태</span>
-                  <span>{selectedStory.status}</span>
-                  <span style={{ opacity: 0.6 }}>공유 설정</span>
-                  <span>{selectedStory.share_option}</span>
-                  <span style={{ opacity: 0.6 }}>생성일</span>
-                  <span>{formatDateTime(selectedStory.created_at)}</span>
-                  <span style={{ opacity: 0.6 }}>수정일</span>
-                  <span>{formatDateTime(selectedStory.updated_at)}</span>
-                </div>
-                <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{selectedStory.story_text}</p>
-
-                {selectedStory.generated_title && (
-                  <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(255, 255, 255, 0.12)" }}>
-                    <h3 style={{ margin: "0 0 8px" }}>{selectedStory.generated_title}</h3>
-                    <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{selectedStory.generated_content}</p>
-                  </div>
-                )}
-
-                {selectedStory.status === "failed" && (
-                  <p className="mml-footnote" style={{ color: "#e5484d" }}>
-                    이야기 생성에 실패했습니다.
-                  </p>
-                )}
-              </div>
-            )}
-          </section>
         </main>
       </div>
     </div>

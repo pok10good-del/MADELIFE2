@@ -1,6 +1,7 @@
 import type { StoryGenerationInput } from "@/lib/ai/story-generation.types";
 import type { ChatPrompt } from "@/lib/ai/chat-prompt";
 import { STORY_ENGINE_CORE_RULES } from "@/lib/ai/prompts/story-engine-rules";
+import { CHOICE_DICTIONARY } from "@/lib/ai/prompts/choice-dictionary";
 
 export interface FusionPlanRetryContext {
   previousPlanJson: string;
@@ -24,6 +25,8 @@ const PLAN_JSON_SHAPE = [
 function buildSystemPrompt(): string {
   return [
     STORY_ENGINE_CORE_RULES,
+    "",
+    CHOICE_DICTIONARY,
     "",
     "[이번 단계의 역할: 결합 계획 수립]",
     "지금은 소설 문장을 작성하는 단계가 아니다. 두 조각을 하나의 인생으로 결합하는 계획을 JSON으로만 출력한다.",

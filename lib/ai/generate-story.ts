@@ -18,7 +18,12 @@ export function generateStory(
     throw new Error("Failed to build story generation prompt");
   }
 
-  const result = parseStoryGenerationResponse(aiResponse);
+  const parsed = parseStoryGenerationResponse(aiResponse);
+  const result: StoryGenerationResult = {
+    ...parsed,
+    startAge: input.currentAge,
+    endAge: input.targetAge,
+  };
 
   const resultValidation = validateStoryGenerationResult(result);
   if (!resultValidation.valid) {

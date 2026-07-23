@@ -1,4 +1,5 @@
 import type { StoriesInsert, StoriesShareOption } from "@/lib/supabase/stories.types";
+import { computeAge } from "@/lib/story-generation/compute-age";
 
 export interface StoryFormInput {
   storyText: string;
@@ -39,6 +40,13 @@ export function mapStoryInputToStoriesInsert(
     throw new Error("story_start_date is required");
   }
 
+  const birthDateString = toDateString(input.birthDate);
+  const currentAge = computeAge(birthDateString, new Date());
+  const targetAge = computeAge(birthDateString, input.storyStartDate);
+  if (targetAge <= currentAge) {
+    throw new Error("이야기가 시작되는 해는 현재보다 나이가 더 많아지는 미래 날짜로 선택해주세요.");
+  }
+
   const selectedPaths = input.selectedPaths.filter((path) => path.trim().length > 0);
   if (selectedPaths.length < 1 || selectedPaths.length > MAX_SELECTED_PATHS) {
     throw new Error(`selected_paths must contain between 1 and ${MAX_SELECTED_PATHS} entries`);
@@ -55,13 +63,10 @@ export function mapStoryInputToStoriesInsert(
   }
 
   const regretPoint = input.regretPoint.trim();
-  if (regretPoint.length === 0) {
-    throw new Error("regret_point is required");
-  }
 
   return {
     story_text: storyText,
-    birth_date: toDateString(input.birthDate),
+    birth_date: birthDateString,
     story_start_date: toDateString(input.storyStartDate),
     selected_paths: selectedPaths,
     sport_choice: sportChoice,

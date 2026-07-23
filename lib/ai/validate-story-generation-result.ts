@@ -4,7 +4,6 @@ export type StoryGenerationResultValidation =
   | { valid: true; errors: [] }
   | { valid: false; errors: string[] };
 
-const EXPECTED_EPISODE_YEAR_SPAN = 2;
 const MIN_THEMES = 1;
 const MAX_THEMES = 2;
 
@@ -35,14 +34,6 @@ export function validateStoryGenerationResult(
     result.endAge <= result.startAge
   ) {
     errors.push("endAge must be an integer greater than startAge");
-  }
-
-  if (
-    Number.isInteger(result.startAge) &&
-    Number.isInteger(result.endAge) &&
-    result.endAge - result.startAge !== EXPECTED_EPISODE_YEAR_SPAN
-  ) {
-    errors.push(`endAge - startAge must be exactly ${EXPECTED_EPISODE_YEAR_SPAN}`);
   }
 
   if (result.themes.length < MIN_THEMES || result.themes.length > MAX_THEMES) {

@@ -9,7 +9,7 @@ export function AuthHeader() {
   const pathname = usePathname();
 
   if (loading) return null;
-  if (pathname?.startsWith("/dashboard")) return null;
+  if (pathname?.startsWith("/dashboard") || pathname?.startsWith("/archive")) return null;
 
   return (
     <div className="auth-header">
