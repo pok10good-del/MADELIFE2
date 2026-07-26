@@ -97,6 +97,8 @@ export default function DashboardPage() {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
   const loggingOutRef = useRef(false);
+  const submitCancelledRef = useRef(false);
+  const submitAbortControllerRef = useRef<AbortController | null>(null);
   const supabase = useMemo(() => createClient(), []);
   const todayStart = useMemo(() => {
     const date = new Date();
@@ -120,6 +122,13 @@ export default function DashboardPage() {
       router.replace("/login");
     }
   }, [loading, user, router]);
+
+  useEffect(() => {
+    return () => {
+      submitCancelledRef.current = true;
+      submitAbortControllerRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -166,11 +175,15 @@ export default function DashboardPage() {
     storyText.trim().length >= STORY_MIN_LENGTH &&
     selectedPaths.length > 0;
 
-  const requestStoryGeneration = async (input: StoryGenerationInput): Promise<StoryGenerationResult> => {
+  const requestStoryGeneration = async (
+    input: StoryGenerationInput,
+    signal: AbortSignal
+  ): Promise<StoryGenerationResult> => {
     const response = await fetch("/api/story/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
+      signal,
     });
 
     if (!response.ok) {
@@ -184,6 +197,10 @@ export default function DashboardPage() {
   const handleSubmit = async () => {
     if (!canSubmit || stage !== "idle") return;
 
+    submitCancelledRef.current = false;
+    const abortController = new AbortController();
+    submitAbortControllerRef.current = abortController;
+
     setStage("episode1");
     setSaveError(null);
 
@@ -191,6 +208,7 @@ export default function DashboardPage() {
 
     try {
       const existingStories = await getUserStories(supabase, user.id);
+      if (submitCancelledRef.current) return;
       if (existingStories.length > 0) {
         setSaveError(
           "이미 시작된 이야기가 있어 새로 시작할 수 없습니다. 보관소에서 이어서 확인해주세요."
@@ -215,9 +233,11 @@ export default function DashboardPage() {
         user_id: user.id,
         episode_number: 1,
       });
+      if (submitCancelledRef.current) return;
 
       const episode1Input = buildStoryGenerationInput(currentRow);
-      const episode1Result = await requestStoryGeneration(episode1Input);
+      const episode1Result = await requestStoryGeneration(episode1Input, abortController.signal);
+      if (submitCancelledRef.current) return;
       const episode1Row = await updateStory(
         supabase,
         user.id,
@@ -225,24 +245,29 @@ export default function DashboardPage() {
         mapStoryGenerationResultToStoriesUpdate(episode1Result)
       );
       currentRow = episode1Row;
+      if (submitCancelledRef.current) return;
 
       setStage("episode2");
 
       const episode2Insert = buildContinuationStoriesInsert(episode1Row, episode1Row, 2);
       currentRow = await saveStory(supabase, user.id, { ...episode2Insert, user_id: user.id });
+      if (submitCancelledRef.current) return;
 
       const episode2Input = buildContinuationStoryGenerationInput(episode1Row, episode1Row);
-      const episode2Result = await requestStoryGeneration(episode2Input);
+      const episode2Result = await requestStoryGeneration(episode2Input, abortController.signal);
+      if (submitCancelledRef.current) return;
       await updateStory(
         supabase,
         user.id,
         currentRow.id,
         mapStoryGenerationResultToStoriesUpdate(episode2Result)
       );
+      if (submitCancelledRef.current) return;
 
       setStage("done");
       router.push("/archive");
     } catch (error) {
+      if (submitCancelledRef.current) return;
       setSaveError(error instanceof Error ? error.message : "저장 중 오류가 발생했습니다.");
       if (currentRow) {
         try {
@@ -252,6 +277,8 @@ export default function DashboardPage() {
         }
       }
       setStage("idle");
+    } finally {
+      submitAbortControllerRef.current = null;
     }
   };
 
