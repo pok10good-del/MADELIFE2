@@ -48,6 +48,29 @@ export async function updateStory(
   return data as StoriesRow;
 }
 
+export async function getStory(
+  supabase: SupabaseClient,
+  userId: string,
+  storyId: string
+): Promise<StoriesRow> {
+  const { data, error } = await supabase
+    .from("stories")
+    .select()
+    .eq("id", storyId)
+    .eq("user_id", userId)
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to fetch story: ${error.message}`);
+  }
+
+  if (!data) {
+    throw new Error("Failed to fetch story: no data returned");
+  }
+
+  return data as StoriesRow;
+}
+
 export async function deleteAllUserStories(
   supabase: SupabaseClient,
   userId: string

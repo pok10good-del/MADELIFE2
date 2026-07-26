@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { createClient } from "@/lib/supabase/client";
-import { getUserStories, saveStory, updateStory } from "@/lib/supabase/stories";
+import { getStory, getUserStories, saveStory, updateStory } from "@/lib/supabase/stories";
 import { mapStoryInputToStoriesInsert } from "@/lib/supabase/stories.mapper";
 import type { StoriesRow } from "@/lib/supabase/stories.types";
 import { buildStoryGenerationInput } from "@/lib/story-generation/build-story-generation-input";
@@ -12,8 +12,7 @@ import {
   buildContinuationStoriesInsert,
   buildContinuationStoryGenerationInput,
 } from "@/lib/story-generation/build-continuation-story-generation-input";
-import { mapStoryGenerationResultToStoriesUpdate } from "@/lib/story-generation/map-generation-result-to-stories-update";
-import type { StoryGenerationInput, StoryGenerationResult } from "@/lib/ai/story-generation.types";
+import type { StoryGenerationInput } from "@/lib/ai/story-generation.types";
 import { AppTopBar } from "@/components/AppTopBar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { DateCalendar } from "./DateCalendar";
@@ -39,6 +38,30 @@ import {
 
 const STORY_MIN_LENGTH = 300;
 const MAX_FRAGMENTS = 2;
+const STORY_POLL_INTERVAL_MS = 1500;
+const STORY_POLL_TIMEOUT_MS = 60000;
+
+async function pollStoryUntilSettled(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  storyId: string,
+  signal: AbortSignal
+): Promise<StoriesRow> {
+  const startedAt = Date.now();
+
+  while (true) {
+    if (signal.aborted) throw new Error("Cancelled");
+
+    const row = await getStory(supabase, userId, storyId);
+    if (row.status === "completed" || row.status === "failed") return row;
+
+    if (Date.now() - startedAt > STORY_POLL_TIMEOUT_MS) {
+      throw new Error("이야기 생성이 시간 내에 완료되지 않았습니다.");
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, STORY_POLL_INTERVAL_MS));
+  }
+}
 
 const FREE_FRAGMENTS = [
   { id: "success", label: "성공", Icon: IconTrophy },
@@ -178,7 +201,7 @@ export default function DashboardPage() {
   const requestStoryGeneration = async (
     input: StoryGenerationInput,
     signal: AbortSignal
-  ): Promise<StoryGenerationResult> => {
+  ): Promise<StoriesRow> => {
     const response = await fetch("/api/story/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -191,7 +214,12 @@ export default function DashboardPage() {
       throw new Error(body.error ?? "이야기 생성 중 오류가 발생했습니다.");
     }
 
-    return (await response.json()) as StoryGenerationResult;
+    const settledRow = await pollStoryUntilSettled(supabase, input.userId, input.storyId, signal);
+    if (settledRow.status === "failed") {
+      throw new Error("이야기 생성에 실패했습니다.");
+    }
+
+    return settledRow;
   };
 
   const handleSubmit = async () => {
@@ -236,16 +264,18 @@ export default function DashboardPage() {
       if (submitCancelledRef.current) return;
 
       const episode1Input = buildStoryGenerationInput(currentRow);
-      const episode1Result = await requestStoryGeneration(episode1Input, abortController.signal);
-      if (submitCancelledRef.current) return;
-      const episode1Row = await updateStory(
-        supabase,
-        user.id,
-        currentRow.id,
-        mapStoryGenerationResultToStoriesUpdate(episode1Result)
-      );
+      const episode1Row = await requestStoryGeneration(episode1Input, abortController.signal);
       currentRow = episode1Row;
       if (submitCancelledRef.current) return;
+
+      if (!episode1Row.generated_content) {
+        // Story generation backend is a stub (status-only) at this stage of the
+        // pending -> processing -> completed plumbing verification; the real
+        // content pipeline isn't wired in yet, so stop here instead of
+        // continuing into episode 2.
+        setStage("done");
+        return;
+      }
 
       setStage("episode2");
 
@@ -254,15 +284,9 @@ export default function DashboardPage() {
       if (submitCancelledRef.current) return;
 
       const episode2Input = buildContinuationStoryGenerationInput(episode1Row, episode1Row);
-      const episode2Result = await requestStoryGeneration(episode2Input, abortController.signal);
+      const episode2Row = await requestStoryGeneration(episode2Input, abortController.signal);
       if (submitCancelledRef.current) return;
-      await updateStory(
-        supabase,
-        user.id,
-        currentRow.id,
-        mapStoryGenerationResultToStoriesUpdate(episode2Result)
-      );
-      if (submitCancelledRef.current) return;
+      currentRow = episode2Row;
 
       setStage("done");
       router.push("/archive");
