@@ -137,7 +137,7 @@ export default function DashboardPage() {
   const [celebrityName, setCelebrityName] = useState("");
   const [shareOption, setShareOption] = useState<"private" | "friends" | "public">("private");
   const [stage, setStage] = useState<"idle" | "episode1" | "episode2" | "done">("idle");
-  const [checkingExisting, setCheckingExisting] = useState(true);
+  const [existingStatus, setExistingStatus] = useState<"checking" | "form" | "in_progress">("checking");
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -160,14 +160,19 @@ export default function DashboardPage() {
     getUserStories(supabase, user.id)
       .then((rows) => {
         if (cancelled) return;
-        if (rows.length > 0) {
+        // 우선순위: completed 존재 > pending/processing/active 존재 > failed뿐이거나 없음.
+        const hasCompleted = rows.some((row) => row.status === "completed");
+        if (hasCompleted) {
           router.replace("/archive");
           return;
         }
-        setCheckingExisting(false);
+        const hasInProgress = rows.some(
+          (row) => row.status === "pending" || row.status === "processing" || row.status === "active"
+        );
+        setExistingStatus(hasInProgress ? "in_progress" : "form");
       })
       .catch(() => {
-        if (!cancelled) setCheckingExisting(false);
+        if (!cancelled) setExistingStatus("form");
       });
 
     return () => {
@@ -176,7 +181,7 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  if (loading || !user || checkingExisting) {
+  if (loading || !user || existingStatus === "checking") {
     return <div className="dashboard-page">불러오는 중...</div>;
   }
 
@@ -185,6 +190,33 @@ export default function DashboardPage() {
     await signOut();
     router.replace("/");
   };
+
+  if (existingStatus === "in_progress") {
+    return (
+      <div className="mml">
+        <AppTopBar />
+        <div className="mml-body">
+          <AppSidebar active="status" onLogout={handleLogout} />
+          <main className="mml-main">
+            <section className="mml-hero">
+              <IconMoon className="mml-hero-moon" />
+              <h1 className="gold-text">운명을 그리다</h1>
+            </section>
+            <div className="mml-generating-panel">
+              <span className="mml-generating-text">
+                이야기 생성이 진행 중입니다
+                <span className="mml-generating-dots">
+                  <span>.</span>
+                  <span>.</span>
+                  <span>.</span>
+                </span>
+              </span>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   const toggleFragment = (id: string) => {
     setSelectedPaths((prev) => {
@@ -237,12 +269,17 @@ export default function DashboardPage() {
     try {
       const existingStories = await getUserStories(supabase, user.id);
       if (submitCancelledRef.current) return;
-      if (existingStories.length > 0) {
-        setSaveError(
-          "이미 시작된 이야기가 있어 새로 시작할 수 없습니다. 보관소에서 이어서 확인해주세요."
-        );
+      const hasCompletedExisting = existingStories.some((row) => row.status === "completed");
+      const hasInProgressExisting = existingStories.some(
+        (row) => row.status === "pending" || row.status === "processing" || row.status === "active"
+      );
+      if (hasCompletedExisting || hasInProgressExisting) {
         setStage("idle");
-        router.replace("/archive");
+        if (hasCompletedExisting) {
+          router.replace("/archive");
+        } else {
+          setExistingStatus("in_progress");
+        }
         return;
       }
 
